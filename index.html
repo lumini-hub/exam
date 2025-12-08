@@ -1,0 +1,1968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Exam Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/uuid/8.3.2/uuid.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#4F46E5', // Indigo 600
+                        secondary: '#10B981', // Emerald 500
+                        accent: '#F59E0B', // Amber 500
+                        danger: '#EF4444', // Red 500
+                        dark: '#1E293B', // Slate 800
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.3s ease-out forwards',
+                        'slide-up': 'slideUp 0.4s ease-out forwards',
+                        'bounce-slight': 'bounceSlight 0.3s infinite alternate',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        slideUp: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                         bounceSlight: {
+                            '0%': { transform: 'translateY(0)' },
+                            '100%': { transform: 'translateY(-5px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f8fafc; /* Slate 50 */
+            -webkit-font-smoothing: antialiased;
+        }
+        .view-hidden { display: none !important; }
+        
+        /* Smooth transitions for views */
+        .view-transition {
+            animation: fadeIn 0.4s ease-in-out;
+        }
+
+        .loader {
+            border: 3px solid #e2e8f0;
+            border-top: 3px solid #4F46E5;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #chat-container {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #chat-container.closed {
+            transform: translateX(100%);
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased selection:bg-primary selection:text-white">
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-[60] flex flex-col gap-3 pointer-events-none"></div>
+
+    <!-- Custom Modal Overlay -->
+    <div id="custom-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] hidden flex items-center justify-center transition-all duration-300 opacity-0">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 transform scale-95 transition-all duration-300" id="modal-content">
+            <div class="mb-4">
+                <div id="modal-icon" class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-4 text-blue-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                </div>
+                <h3 id="modal-title" class="text-2xl font-bold text-slate-800 mb-2">Title</h3>
+                <p id="modal-message" class="text-slate-500 leading-relaxed">Message goes here...</p>
+            </div>
+            <div class="flex justify-end gap-3 mt-8">
+                <button id="modal-cancel" class="px-5 py-2.5 rounded-xl text-slate-600 font-medium hover:bg-slate-100 transition-colors hidden">Cancel</button>
+                <button id="modal-confirm" class="px-5 py-2.5 rounded-xl bg-primary text-white font-medium hover:bg-indigo-700 shadow-lg shadow-indigo-500/30 transition-all transform hover:scale-[1.02] active:scale-95">Okay</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="app" class="min-h-screen flex flex-col relative overflow-hidden">
+        
+        <!-- Decorative Background Elements -->
+        <div class="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-blue-50 to-transparent -z-10"></div>
+        <div class="absolute -top-24 -right-24 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl -z-10"></div>
+        <div class="absolute top-48 -left-24 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl -z-10"></div>
+
+        <div class="max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 flex-grow">
+
+            <!-- Auth View Container -->
+            <div id="auth-view" class="view-transition">
+                <!-- Login Form -->
+                <div id="login-form" class="max-w-md mx-auto mt-10 sm:mt-20">
+                    <div class="bg-white p-8 sm:p-10 rounded-3xl shadow-xl border border-slate-100 relative overflow-hidden">
+                         <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-primary to-secondary"></div>
+                        <h1 class="text-4xl font-bold text-slate-800 mb-2 text-center tracking-tight">Welcome Back</h1>
+                        <p class="text-slate-500 mb-8 text-center">Login to access your exam dashboard</p>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1 ml-1">Email</label>
+                                <input type="email" id="login-email" placeholder="name@example.com" class="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary focus:outline-none transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1 ml-1">Password</label>
+                                <input type="password" id="login-password" placeholder="••••••••" class="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary focus:outline-none transition-all">
+                            </div>
+                        </div>
+
+                        <p id="login-error" class="text-danger text-sm text-center min-h-[1.5rem] mt-3 font-medium"></p>
+                        
+                        <button id="login-button" class="w-full mt-2 bg-primary text-white font-semibold py-3.5 rounded-xl hover:bg-indigo-700 transition-all transform hover:scale-[1.01] active:scale-[0.98] shadow-lg shadow-indigo-500/25 flex justify-center items-center gap-2">
+                            <span>Login</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                        </button>
+                        
+                        <!-- Google Login Divider -->
+                        <div class="relative my-6">
+                            <div class="absolute inset-0 flex items-center">
+                                <div class="w-full border-t border-slate-200"></div>
+                            </div>
+                            <div class="relative flex justify-center text-sm">
+                                <span class="px-2 bg-white text-slate-500">Or continue with</span>
+                            </div>
+                        </div>
+
+                        <!-- Google Login Button -->
+                        <button id="google-login-btn" class="w-full bg-white text-slate-700 font-semibold py-3.5 rounded-xl border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all flex justify-center items-center gap-3">
+                            <svg class="h-5 w-5" viewBox="0 0 24 24">
+                                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                            </svg>
+                            <span>Sign in with Google</span>
+                        </button>
+
+                        <p class="text-center text-sm text-slate-500 mt-6">
+                            New here? <a href="javascript:void(0)" id="show-signup" class="font-semibold text-primary hover:text-indigo-700 transition-colors">Create an account</a>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Signup Form -->
+                <div id="signup-form" class="view-hidden max-w-md mx-auto mt-10 sm:mt-20">
+                    <div class="bg-white p-8 sm:p-10 rounded-3xl shadow-xl border border-slate-100 relative overflow-hidden">
+                        <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-secondary to-primary"></div>
+                        <h1 class="text-4xl font-bold text-slate-800 mb-2 text-center tracking-tight">Get Started</h1>
+                        <p class="text-slate-500 mb-8 text-center">Create your account in seconds</p>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1 ml-1">Email</label>
+                                <input type="email" id="signup-email" placeholder="name@example.com" class="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-secondary/20 focus:border-secondary focus:outline-none transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1 ml-1">Password</label>
+                                <input type="password" id="signup-password" placeholder="Min. 6 characters" class="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-secondary/20 focus:border-secondary focus:outline-none transition-all">
+                            </div>
+                        </div>
+
+                        <p id="signup-error" class="text-danger text-sm text-center min-h-[1.5rem] mt-3 font-medium"></p>
+                        
+                        <button id="signup-button" class="w-full mt-2 bg-secondary text-white font-semibold py-3.5 rounded-xl hover:bg-emerald-600 transition-all transform hover:scale-[1.01] active:scale-[0.98] shadow-lg shadow-emerald-500/25">Sign Up</button>
+                        
+                         <!-- Google Signup Divider -->
+                        <div class="relative my-6">
+                            <div class="absolute inset-0 flex items-center">
+                                <div class="w-full border-t border-slate-200"></div>
+                            </div>
+                            <div class="relative flex justify-center text-sm">
+                                <span class="px-2 bg-white text-slate-500">Or sign up with</span>
+                            </div>
+                        </div>
+
+                        <!-- Google Signup Button -->
+                        <button id="google-signup-btn" class="w-full bg-white text-slate-700 font-semibold py-3.5 rounded-xl border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all flex justify-center items-center gap-3">
+                            <svg class="h-5 w-5" viewBox="0 0 24 24">
+                                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                            </svg>
+                            <span>Sign up with Google</span>
+                        </button>
+
+                        <p class="text-center text-sm text-slate-500 mt-6">
+                            Already registered? <a href="javascript:void(0)" id="show-login" class="font-semibold text-primary hover:text-indigo-700 transition-colors">Login instead</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- App Dashboard View (Post-Login) -->
+            <div id="app-dashboard-view" class="view-hidden view-transition">
+                <header class="flex flex-col sm:flex-row justify-between items-center mb-10 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+                    <div class="flex items-center gap-4 mb-4 sm:mb-0">
+                        <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-indigo-700 text-white flex items-center justify-center font-bold text-xl shadow-lg shadow-indigo-500/30">E</div>
+                        <div>
+                            <h2 class="text-2xl font-bold text-slate-800">Dashboard</h2>
+                            <p class="text-slate-500 text-sm">Manage your exams and results</p>
+                        </div>
+                    </div>
+                    <button id="logout-button" class="group flex items-center gap-2 bg-slate-100 text-slate-600 font-semibold py-2.5 px-6 rounded-xl hover:bg-red-50 hover:text-danger transition-all">
+                        <span>Logout</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 opacity-50 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                    </button>
+                </header>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Left Side: Create & Join -->
+                    <div class="space-y-8">
+                        <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 transition-all hover:shadow-md">
+                            <div class="flex items-center gap-3 mb-6">
+                                <span class="p-2 bg-blue-100 text-blue-600 rounded-lg"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></span>
+                                <h3 class="text-2xl font-bold text-slate-800">Join an Exam</h3>
+                            </div>
+                            <div class="space-y-4">
+                                <input type="text" id="student-name" placeholder="Enter Your Full Name" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all">
+                                <input type="text" id="exam-code-input" placeholder="Enter 6-Digit Exam Code" class="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none transition-all uppercase tracking-widest font-mono">
+                                
+                                <div class="grid grid-cols-2 gap-3 pt-2">
+                                    <button id="join-exam-button" class="w-full bg-slate-800 text-white font-semibold py-4 rounded-xl hover:bg-slate-900 transition-all transform hover:scale-[1.01] active:scale-[0.98] shadow-lg shadow-slate-500/20 flex items-center justify-center gap-2">
+                                        <span>Start Exam</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                                    </button>
+                                    <button id="check-results-button" class="w-full bg-white border-2 border-slate-200 text-slate-700 font-bold py-4 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                                        View Results
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-gradient-to-br from-primary to-indigo-700 p-8 rounded-3xl shadow-xl shadow-indigo-500/30 text-white relative overflow-hidden group">
+                            <div class="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-2xl transform translate-x-1/2 -translate-y-1/2 group-hover:opacity-10 transition-opacity"></div>
+                            <h3 class="text-2xl font-bold mb-2">Create an Exam</h3>
+                            <p class="text-indigo-100 mb-6 opacity-90">Design secure exams with multiple question types and automated grading.</p>
+                            <button id="create-exam-button" class="w-full bg-white text-primary font-bold py-4 px-6 rounded-xl hover:bg-indigo-50 transition-all transform hover:scale-[1.01] active:scale-[0.98] shadow-lg flex items-center justify-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                                Create New Exam
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Right Side: My Exams -->
+                    <div class="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col h-full">
+                        <div class="flex items-center gap-3 mb-6">
+                            <span class="p-2 bg-emerald-100 text-emerald-600 rounded-lg"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg></span>
+                            <h3 class="text-2xl font-bold text-slate-800">My Exams</h3>
+                        </div>
+                        <div id="exam-list" class="space-y-4 overflow-y-auto custom-scrollbar flex-grow max-h-[500px] pr-2">
+                            <!-- Exam cards will be dynamically inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        
+            <!-- Exam Editor View -->
+            <div id="exam-editor-view" class="view-hidden view-transition bg-white p-8 rounded-3xl shadow-lg border border-slate-100 max-w-5xl mx-auto">
+                <div class="flex justify-between items-center mb-8 border-b border-slate-100 pb-6">
+                    <h2 class="text-3xl font-bold text-slate-800" id="editor-heading">Create New Exam</h2>
+                    <div class="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-xl border border-slate-200">
+                         <label for="time-limit" class="text-sm font-semibold text-slate-600">Time (min):</label>
+                         <input type="number" id="time-limit" value="60" min="1" class="w-20 bg-transparent font-bold text-slate-800 text-center focus:outline-none">
+                    </div>
+                </div>
+                
+                <input type="text" id="exam-title" placeholder="Exam Title (e.g. Midterm Physics)" class="w-full text-3xl font-bold p-4 border-b-2 border-slate-100 focus:border-primary focus:outline-none bg-transparent mb-8 transition-colors placeholder-slate-300">
+
+                <div id="questions-container" class="space-y-8 mb-12"></div>
+            
+                <div class="bg-slate-50 p-6 rounded-2xl border border-dashed border-slate-300">
+                    <h4 class="font-semibold text-slate-600 mb-4 flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd" /></svg>
+                        Add Question Type:
+                    </h4>
+                    <div id="add-question-buttons" class="flex flex-wrap items-center gap-3">
+                        <button data-type="mcq" class="bg-white border border-slate-200 text-slate-700 font-medium py-2 px-4 rounded-lg hover:border-blue-500 hover:text-blue-600 hover:shadow-sm transition-all text-sm">Multiple Choice</button>
+                        <button data-type="multiple-response" class="bg-white border border-slate-200 text-slate-700 font-medium py-2 px-4 rounded-lg hover:border-cyan-500 hover:text-cyan-600 hover:shadow-sm transition-all text-sm">Multiple Response</button>
+                        <button data-type="true-false" class="bg-white border border-slate-200 text-slate-700 font-medium py-2 px-4 rounded-lg hover:border-green-500 hover:text-green-600 hover:shadow-sm transition-all text-sm">True / False</button>
+                        <button data-type="numeric" class="bg-white border border-slate-200 text-slate-700 font-medium py-2 px-4 rounded-lg hover:border-orange-500 hover:text-orange-600 hover:shadow-sm transition-all text-sm">Numeric</button>
+                        <button data-type="fill-blank" class="bg-white border border-slate-200 text-slate-700 font-medium py-2 px-4 rounded-lg hover:border-pink-500 hover:text-pink-600 hover:shadow-sm transition-all text-sm">Fill-in-Blank</button>
+                        <button data-type="matching" class="bg-white border border-slate-200 text-slate-700 font-medium py-2 px-4 rounded-lg hover:border-teal-500 hover:text-teal-600 hover:shadow-sm transition-all text-sm">Matching</button>
+                        <button data-type="short" class="bg-white border border-slate-200 text-slate-700 font-medium py-2 px-4 rounded-lg hover:border-indigo-500 hover:text-indigo-600 hover:shadow-sm transition-all text-sm">Short Answer</button>
+                        <button data-type="long" class="bg-white border border-slate-200 text-slate-700 font-medium py-2 px-4 rounded-lg hover:border-purple-500 hover:text-purple-600 hover:shadow-sm transition-all text-sm">Essay</button>
+                    </div>
+                </div>
+
+                <div class="mt-8 flex justify-end gap-4 sticky bottom-4">
+                    <button id="cancel-exam-button" class="bg-white border border-slate-200 text-slate-700 font-bold py-3 px-8 rounded-xl hover:bg-slate-50 transition shadow-sm">Cancel</button>
+                    <button id="save-exam-button" class="bg-primary text-white font-bold py-3 px-8 rounded-xl hover:bg-indigo-700 transition-transform transform hover:scale-105 shadow-lg shadow-indigo-500/30">Save Exam</button>
+                </div>
+            </div>
+        
+            <!-- Exam Taking View -->
+            <div id="exam-taking-view" class="view-hidden view-transition relative max-w-4xl mx-auto">
+                <div class="bg-white p-6 sm:p-10 rounded-3xl shadow-xl border border-slate-100">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-6 mb-8 sticky top-0 bg-white/95 backdrop-blur-sm z-10 transition-all">
+                        <div>
+                            <h2 id="student-exam-title" class="text-3xl font-bold text-slate-800"></h2>
+                            <p id="student-name-display" class="text-slate-500 text-lg mt-1 font-medium"></p>
+                        </div>
+                        <div id="timer" class="text-2xl font-mono font-bold text-danger bg-red-50 px-6 py-3 rounded-xl border border-red-100 shadow-sm mt-4 sm:mt-0 animate-pulse">00:00</div>
+                    </div>
+                    <div id="student-questions-container" class="space-y-10"></div>
+                    <div class="mt-12 flex justify-end border-t border-slate-100 pt-8">
+                        <button id="submit-exam-button" class="bg-emerald-500 text-white font-bold py-4 px-12 rounded-xl hover:bg-emerald-600 transition-all transform hover:scale-[1.02] shadow-lg shadow-emerald-500/30 flex items-center gap-2">
+                            <span>Submit Exam</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        
+            <!-- Collapsible Chat -->
+            <div id="chat-wrapper" class="view-hidden">
+                <button id="chat-tab" class="fixed right-0 top-1/2 -translate-y-1/2 bg-white text-primary p-3 rounded-l-2xl shadow-lg border border-r-0 border-slate-200 flex items-center gap-3 transition-all transform hover:bg-slate-50 hover:pl-4 z-40 group">
+                    <div class="relative">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
+                        <span id="chat-notification" class="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full view-hidden border-2 border-white"></span>
+                    </div>
+                    <span class="font-bold hidden group-hover:inline transition-all">Support</span>
+                </button>
+                <div id="chat-container" class="fixed top-0 right-0 h-full w-full sm:w-[400px] bg-white shadow-2xl border-l border-slate-200 flex flex-col z-50 closed">
+                    <div class="bg-gradient-to-r from-primary to-indigo-700 text-white p-5 flex-shrink-0 flex justify-between items-center shadow-md">
+                        <div class="flex items-center gap-3">
+                            <div class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+                            <h3 class="font-bold text-lg">Instructor Chat</h3>
+                        </div>
+                        <button id="chat-close-button" class="text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full p-1 transition">&times;</button>
+                    </div>
+                    <div id="chat-messages" class="flex-1 p-5 space-y-4 overflow-y-auto bg-slate-50">
+                        <!-- Messages will appear here -->
+                    </div>
+                    <div class="p-4 border-t border-slate-200 flex-shrink-0 flex gap-3 bg-white">
+                        <input type="text" id="chat-input" placeholder="Type your message..." class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary focus:outline-none">
+                        <button id="send-chat-button" class="bg-primary text-white p-3 rounded-xl hover:bg-indigo-700 transition shadow-md shadow-indigo-500/20">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" /></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Student Results View -->
+            <div id="results-view" class="view-hidden view-transition">
+                 <div class="bg-white p-8 sm:p-12 rounded-3xl shadow-xl border border-slate-100 max-w-4xl mx-auto mt-10">
+                    <div class="text-center mb-10">
+                        <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-emerald-100 text-emerald-600 mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        </div>
+                        <h2 class="text-3xl font-bold text-slate-800 mb-2">Exam Results</h2>
+                        <p id="results-summary" class="text-xl text-slate-600 font-medium"></p>
+                    </div>
+                    
+                    <div id="results-loader" class="view-hidden"><div class="loader"></div><p class="text-center text-slate-500 animate-pulse">AI is grading your responses...</p></div>
+                    
+                    <div id="results-details-container" class="space-y-6">
+                        <!-- Detailed results will be shown here -->
+                    </div>
+                    <div class="text-center mt-10">
+                        <button id="results-back-button" class="bg-slate-800 text-white font-semibold py-3.5 px-8 rounded-xl hover:bg-slate-900 transition shadow-lg shadow-slate-500/20">Back to Dashboard</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Teacher Results View (List of Submissions) -->
+            <div id="teacher-results-view" class="view-hidden view-transition">
+                 <div class="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 max-w-5xl mx-auto mt-4">
+                    <div class="flex items-center justify-between mb-8">
+                        <h2 id="teacher-results-heading" class="text-3xl font-bold text-slate-800">Submissions</h2>
+                        <button id="teacher-results-back-button" class="text-slate-500 hover:text-slate-800 font-medium flex items-center gap-1 transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                            Back
+                        </button>
+                    </div>
+                    <div id="submission-list" class="space-y-4">
+                        <!-- Submission list will be shown here -->
+                    </div>
+                </div>
+            </div>
+        
+            <!-- Manual Grading View -->
+            <div id="manual-grading-view" class="view-hidden view-transition">
+                <div class="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 max-w-4xl mx-auto mt-4">
+                    <div class="flex justify-between items-center mb-6">
+                         <h2 id="manual-grading-heading" class="text-3xl font-bold text-slate-800">Grade Submission</h2>
+                         <div class="bg-slate-100 px-4 py-2 rounded-xl">
+                            <p id="manual-grading-summary" class="text-lg font-bold text-slate-700"></p>
+                         </div>
+                    </div>
+                   
+                    <div id="manual-grading-container" class="space-y-6">
+                        <!-- Questions to grade will be shown here -->
+                    </div>
+                    <div class="text-center mt-10">
+                        <button id="grading-back-button" class="bg-slate-200 text-slate-700 font-bold py-3 px-8 rounded-xl hover:bg-slate-300 transition">Back to Submissions</button>
+                    </div>
+                </div>
+            </div>
+
+        
+            <!-- Teacher Chat View -->
+            <div id="teacher-chat-view" class="view-hidden view-transition">
+                <div class="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 max-w-7xl mx-auto h-[85vh] flex flex-col">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 id="teacher-chat-heading" class="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                             <span class="w-3 h-3 rounded-full bg-emerald-500"></span> Live Support
+                        </h2>
+                         <button id="teacher-chat-back-button" class="bg-slate-100 text-slate-600 font-semibold py-2 px-4 rounded-xl hover:bg-slate-200 transition">Exit</button>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-6 flex-1 min-h-0">
+                        <!-- Student List -->
+                        <div class="md:col-span-3 border-r border-slate-100 pr-4 flex flex-col min-h-0">
+                            <h3 class="font-semibold text-sm text-slate-500 uppercase tracking-wider mb-4">Active Students</h3>
+                            <div id="chat-student-list" class="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-2">
+                                <!-- Student list items will appear here -->
+                            </div>
+                        </div>
+
+                        <!-- Chat Panel -->
+                        <div class="md:col-span-9 flex flex-col min-h-0">
+                            <div id="teacher-chat-panel" class="flex-1 p-6 border border-slate-200 rounded-2xl bg-slate-50 overflow-y-auto custom-scrollbar mb-4 space-y-4">
+                                <p class="text-slate-400 text-center m-auto flex flex-col items-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                                    Select a student to view chat
+                                </p>
+                            </div>
+                            <div id="teacher-reply-area" class="view-hidden flex gap-3">
+                                <input type="text" id="teacher-chat-input" placeholder="Reply to student..." class="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary focus:outline-none transition">
+                                <button id="teacher-send-reply-button" class="bg-primary text-white font-semibold px-6 rounded-xl hover:bg-indigo-700 transition shadow-lg shadow-indigo-500/30">Send</button>
+                            </div>
+                             <!-- Announcements -->
+                            <div class="mt-4 pt-4 border-t border-slate-100">
+                                <div class="flex gap-3 items-center">
+                                    <span class="text-xs font-bold text-accent uppercase bg-amber-50 px-2 py-1 rounded">Broadcast</span>
+                                    <input type="text" id="announcement-input" placeholder="Send announcement to everyone..." class="w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-accent/20 focus:border-accent focus:outline-none text-sm">
+                                    <button id="send-announcement-button" class="bg-accent text-white font-semibold px-4 py-3 rounded-xl hover:bg-amber-600 transition shadow-sm">
+                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" /></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+   
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <script>
+        // --- CUSTOM UI HELPERS (Modals & Toasts) ---
+        const modalEl = document.getElementById('custom-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMsg = document.getElementById('modal-message');
+        const modalConfirmBtn = document.getElementById('modal-confirm');
+        const modalCancelBtn = document.getElementById('modal-cancel');
+        const modalIcon = document.getElementById('modal-icon');
+        let modalResolve = null;
+
+        const showToast = (message, type = 'success') => {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            let bgClass = 'bg-white border-l-4 border-emerald-500';
+            let textClass = 'text-slate-700';
+            let icon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`;
+
+            if (type === 'error') {
+                bgClass = 'bg-white border-l-4 border-red-500';
+                icon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`;
+            } else if (type === 'info') {
+                bgClass = 'bg-white border-l-4 border-blue-500';
+                icon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`;
+            }
+
+            toast.className = `${bgClass} p-4 rounded-xl shadow-xl flex items-center gap-3 transform translate-x-10 opacity-0 transition-all duration-300 pointer-events-auto min-w-[300px]`;
+            toast.innerHTML = `${icon}<span class="${textClass} font-medium">${message}</span>`;
+            
+            container.appendChild(toast);
+            
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-x-10', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('translate-x-10', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        };
+
+        const toggleModal = (show) => {
+            if (show) {
+                modalEl.classList.remove('hidden');
+                requestAnimationFrame(() => {
+                    modalEl.classList.remove('opacity-0');
+                    document.getElementById('modal-content').classList.remove('scale-95');
+                    document.getElementById('modal-content').classList.add('scale-100');
+                });
+            } else {
+                modalEl.classList.add('opacity-0');
+                document.getElementById('modal-content').classList.remove('scale-100');
+                document.getElementById('modal-content').classList.add('scale-95');
+                setTimeout(() => modalEl.classList.add('hidden'), 300);
+            }
+        };
+
+        const showAlert = (title, message) => {
+            return new Promise((resolve) => {
+                modalTitle.innerText = title;
+                modalMsg.innerText = message;
+                modalCancelBtn.classList.add('hidden');
+                modalConfirmBtn.innerText = "Okay";
+                modalConfirmBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
+                modalConfirmBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+                modalIcon.className = "w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-4 text-blue-600";
+                modalIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`;
+                
+                modalResolve = resolve;
+                toggleModal(true);
+                
+                modalConfirmBtn.onclick = () => {
+                    toggleModal(false);
+                    if(modalResolve) modalResolve(true);
+                };
+            });
+        };
+
+        const showConfirm = (title, message, isDanger = false) => {
+             return new Promise((resolve) => {
+                modalTitle.innerText = title;
+                modalMsg.innerText = message;
+                modalCancelBtn.classList.remove('hidden');
+                modalConfirmBtn.innerText = isDanger ? "Yes, Delete" : "Yes, Proceed";
+                
+                if (isDanger) {
+                    modalConfirmBtn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                    modalConfirmBtn.classList.add('bg-red-500', 'hover:bg-red-600');
+                    modalIcon.className = "w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4 text-red-600";
+                    modalIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>`;
+                } else {
+                    modalConfirmBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
+                    modalConfirmBtn.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+                    modalIcon.className = "w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-4 text-blue-600";
+                    modalIcon.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`;
+                }
+                
+                modalResolve = resolve;
+                toggleModal(true);
+                
+                modalConfirmBtn.onclick = () => {
+                    toggleModal(false);
+                    if(modalResolve) modalResolve(true);
+                };
+                modalCancelBtn.onclick = () => {
+                    toggleModal(false);
+                    if(modalResolve) modalResolve(false);
+                }
+            });
+        };
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBWrHiR-IDa9RVAybVJ-UVEn5Hx9_qBWX4",
+            authDomain: "exam-5e0cd.firebaseapp.com",
+            projectId: "exam-5e0cd",
+            storageBucket: "exam-5e0cd.appspot.com",
+            messagingSenderId: "903148128941",
+            appId: "1:903148128941:web:530b620c3e91dddec19424"
+        };
+
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let currentUser = null;
+        let currentExamId = null;
+        let examTimerInterval = null;
+        let chatUnsubscribe = null;
+        let activeTeacherChatExamId = null;
+        let activeTeacherChatStudentId = null;
+        let allChatMessages = [];
+        let lastMessageTimestamp = null;
+
+
+        // --- UI Navigation ---
+        const showView = (viewId) => {
+            document.querySelectorAll('#app > div > div').forEach(div => {
+                if(div.id.includes('view') && div.id !== 'toast-container' && div.id !== 'custom-modal') {
+                     div.classList.add('view-hidden');
+                }
+            });
+            const el = document.getElementById(viewId);
+            if(el) {
+                el.classList.remove('view-hidden');
+                // Trigger animation
+                el.classList.remove('animate-fade-in');
+                void el.offsetWidth; // trigger reflow
+                el.classList.add('animate-fade-in');
+            }
+           
+            // Show/hide chat based on view
+            if (viewId === 'exam-taking-view') {
+                document.getElementById('chat-wrapper').classList.remove('view-hidden');
+            } else {
+                document.getElementById('chat-wrapper').classList.add('view-hidden');
+            }
+        };
+       
+        const toggleAuthView = (formToShow) => {
+            if (formToShow === 'signup') {
+                document.getElementById('login-form').classList.add('view-hidden');
+                document.getElementById('signup-form').classList.remove('view-hidden');
+                document.getElementById('signup-form').classList.add('animate-slide-up');
+            } else {
+                document.getElementById('login-form').classList.remove('view-hidden');
+                document.getElementById('signup-form').classList.add('view-hidden');
+                document.getElementById('login-form').classList.add('animate-slide-up');
+            }
+        };
+       
+        // --- Authentication ---
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                currentUser = user;
+                showView('app-dashboard-view');
+                loadExams();
+            } else {
+                currentUser = null;
+                showView('auth-view');
+                toggleAuthView('login');
+            }
+        });
+
+        const handleLogin = async () => {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const errorEl = document.getElementById('login-error');
+            const buttonEl = document.getElementById('login-button');
+
+            errorEl.textContent = '';
+            if (!email || !password) {
+                showToast("Please enter email and password.", 'error');
+                return;
+            }
+
+            buttonEl.disabled = true;
+            buttonEl.innerHTML = '<span class="loader w-5 h-5 border-2 border-white/50 border-t-white inline-block"></span>';
+
+            try {
+                await auth.signInWithEmailAndPassword(email, password);
+                showToast("Welcome back!", 'success');
+            } catch (error) {
+                console.error("Login Error:", error.code);
+                errorEl.textContent = 'Invalid email or password.';
+                showToast("Login failed. Check your credentials.", 'error');
+            } finally {
+                buttonEl.disabled = false;
+                buttonEl.innerHTML = '<span>Login</span><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>';
+            }
+        };
+
+        const handleSignup = async () => {
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+            const errorEl = document.getElementById('signup-error');
+            const buttonEl = document.getElementById('signup-button');
+
+            errorEl.textContent = '';
+            if (!email || !password) {
+                showToast("Please enter email and password.", 'error');
+                return;
+            }
+            if (password.length < 6) {
+                showToast("Password should be at least 6 characters.", 'error');
+                return;
+            }
+
+            buttonEl.disabled = true;
+            buttonEl.textContent = 'Creating Account...';
+
+            try {
+                await auth.createUserWithEmailAndPassword(email, password);
+                showToast("Account created successfully!", 'success');
+            } catch (error) {
+                 console.error("Signup Error:", error.code);
+                if (error.code === 'auth/email-already-in-use') {
+                    errorEl.textContent = 'This email address is already in use.';
+                    showToast("Email already in use.", 'error');
+                } else {
+                    errorEl.textContent = 'Signup failed. Please try again.';
+                    showToast(error.message, 'error');
+                }
+            } finally {
+                buttonEl.disabled = false;
+                buttonEl.textContent = 'Sign Up';
+            }
+        };
+
+        const handleGoogleLogin = async () => {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            try {
+                await auth.signInWithPopup(provider);
+                showToast("Welcome back!", 'success');
+            } catch (error) {
+                console.error("Google Login Error:", error);
+                if (error.code !== 'auth/popup-closed-by-user') {
+                    showToast("Google sign in failed: " + error.message, 'error');
+                }
+            }
+        };
+       
+        const logout = () => {
+            auth.signOut();
+            localStorage.clear();
+            if(examTimerInterval) clearInterval(examTimerInterval);
+            if(chatUnsubscribe) chatUnsubscribe();
+            showToast("Logged out successfully.");
+        };
+
+        const deleteExam = async (examId) => {
+             const confirmed = await showConfirm("Delete Exam?", "Are you sure you want to delete this exam and all its data? This action cannot be undone.", true);
+             if (!confirmed) return;
+
+            try {
+                const subcollections = ["submissions", "chat"];
+                for (const sub of subcollections) {
+                    const subCollectionQuery = db.collection("exams").doc(examId).collection(sub);
+                    const subCollectionSnapshot = await subCollectionQuery.get();
+                    const deletePromises = [];
+                    subCollectionSnapshot.forEach((doc) => {
+                        deletePromises.push(doc.ref.delete());
+                    });
+                    await Promise.all(deletePromises);
+                }
+                await db.collection("exams").doc(examId).delete();
+                showToast("Exam deleted successfully.", 'success');
+                loadExams();
+            } catch (error) {
+                console.error("Error deleting exam: ", error);
+                showToast("Failed to delete exam.", 'error');
+            }
+        };
+
+        // --- Main Dashboard ---
+        async function loadExams() {
+            if (!currentUser) return;
+            const q = db.collection("exams").where("creatorId", "==", currentUser.uid);
+            const querySnapshot = await q.get();
+            const examList = document.getElementById('exam-list');
+            examList.innerHTML = '';
+            if(querySnapshot.empty){
+                examList.innerHTML = `<div class="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
+                    <p class="text-slate-500 mb-2">You haven't created any exams yet.</p>
+                    <button onclick="showExamEditor()" class="text-primary font-semibold hover:underline">Create your first exam</button>
+                </div>`;
+                return;
+            }
+            querySnapshot.forEach((doc) => {
+                const exam = doc.data();
+                const examCard = `
+                    <div class="bg-slate-50 p-5 rounded-2xl border border-slate-100 hover:border-blue-200 transition-all group shadow-sm hover:shadow-md">
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <h4 class="font-bold text-slate-800 text-lg">${exam.title}</h4>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Code:</span>
+                                    <span class="font-mono bg-white border border-slate-200 text-slate-700 px-2 py-1 rounded text-sm select-all cursor-pointer hover:border-blue-400" onclick="copyToClipboard('${doc.id}')">${doc.id}</span>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg p-2 border border-slate-200 text-slate-400">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-200" data-exam-id="${doc.id}">
+                           <button data-action="edit" class="flex-1 bg-white border border-slate-200 text-slate-600 font-semibold py-2 px-3 rounded-lg hover:bg-slate-100 hover:text-blue-600 transition text-sm flex justify-center items-center gap-1">Edit</button>
+                           <button data-action="results" class="flex-1 bg-white border border-slate-200 text-slate-600 font-semibold py-2 px-3 rounded-lg hover:bg-slate-100 hover:text-emerald-600 transition text-sm flex justify-center items-center gap-1">Results</button>
+                           <button data-action="chat" class="flex-1 bg-white border border-slate-200 text-slate-600 font-semibold py-2 px-3 rounded-lg hover:bg-slate-100 hover:text-indigo-600 transition text-sm flex justify-center items-center gap-1">Chat</button>
+                           <button data-action="delete" class="px-3 text-slate-400 hover:text-red-500 transition"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg></button>
+                        </div>
+                    </div>`;
+                examList.innerHTML += examCard;
+            });
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => showToast("Code copied!"));
+        }
+       
+        const showExamEditor = async (examId = null) => {
+            currentExamId = examId;
+            document.getElementById('exam-title').value = '';
+            document.getElementById('time-limit').value = 60;
+            document.getElementById('questions-container').innerHTML = '';
+            const heading = document.getElementById('editor-heading');
+            questionIdCounter = 0;
+
+            if (examId) {
+                heading.innerText = 'Edit Exam';
+                const docRef = db.collection("exams").doc(examId);
+                const docSnap = await docRef.get();
+                if (docSnap.exists) {
+                    const exam = docSnap.data();
+                    document.getElementById('exam-title').value = exam.title;
+                    document.getElementById('time-limit').value = exam.timeLimit || 60;
+                    exam.questions.forEach((q) => addQuestion(q.type, q));
+                }
+            } else {
+                 heading.innerText = 'Create New Exam';
+                 // Add one default question
+                 addQuestion('mcq');
+            }
+            showView('exam-editor-view');
+        };
+
+        const editExam = (examId) => showExamEditor(examId);
+       
+        // --- Exam Editor ---
+        let questionIdCounter = 0;
+        function generateExamCode() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let result = '';
+            for (let i = 0; i < 6; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        }
+
+        const addMatchingPair = (questionId) => {
+            const container = document.querySelector(`#${questionId} .matching-container`);
+            const pairIndex = container.querySelectorAll('.matching-pair').length;
+            const newPairHTML = `
+                <div class="matching-pair grid grid-cols-2 gap-4 mt-2">
+                    <input type="text" class="w-full p-2.5 bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-teal-500" placeholder="Prompt ${pairIndex + 1}">
+                    <input type="text" class="w-full p-2.5 bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-teal-500" placeholder="Answer ${pairIndex + 1}">
+                </div>`;
+            container.insertAdjacentHTML('beforeend', newPairHTML);
+        };
+        window.addMatchingPair = addMatchingPair;
+
+        const addQuestion = (type, data = null) => {
+            const container = document.getElementById('questions-container');
+            const questionId = `q-${questionIdCounter++}`;
+            const questionIndex = container.children.length + 1;
+            
+            // Define colors/borders based on type for visual distinction
+            let typeColor = 'border-slate-200';
+            let typeBadge = 'bg-slate-100 text-slate-600';
+            let typeName = 'Question';
+            
+            if(type === 'mcq') { typeColor = 'border-l-4 border-l-blue-500'; typeBadge = 'bg-blue-100 text-blue-700'; typeName = 'Multiple Choice'; }
+            if(type === 'true-false') { typeColor = 'border-l-4 border-l-green-500'; typeBadge = 'bg-green-100 text-green-700'; typeName = 'True/False'; }
+            if(type === 'short') { typeColor = 'border-l-4 border-l-indigo-500'; typeBadge = 'bg-indigo-100 text-indigo-700'; typeName = 'Short Answer'; }
+
+            let questionHTML = `
+                <div id="${questionId}" class="p-6 bg-slate-50 rounded-2xl border border-slate-200 relative shadow-sm transition-all hover:shadow-md group ${typeColor}" data-type="${type}">
+                    <button onclick="this.parentElement.remove()" class="absolute top-4 right-4 text-slate-400 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg></button>
+                    <div class="flex justify-between items-center mb-4 pr-10">
+                         <div class="flex items-center gap-3">
+                            <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${typeBadge}">${typeName}</span>
+                            <label class="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-primary cursor-pointer transition">
+                                <input type="checkbox" class="manual-grade-check h-4 w-4 rounded text-primary focus:ring-primary border-slate-300" ${data && data.manualGrading ? 'checked' : ''}>
+                                Manual Grading
+                            </label>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label class="font-medium text-slate-600 text-sm">Pts:</label>
+                            <input type="number" value="${data ? data.points : 10}" min="1" class="w-16 p-1.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-center font-bold text-slate-700">
+                        </div>
+                    </div>
+                    <textarea rows="2" class="w-full p-4 bg-white border border-slate-200 rounded-xl mb-6 text-lg focus:ring-2 focus:ring-primary/30 focus:border-primary transition outline-none resize-none" placeholder="Enter your question here...">${data ? data.text : ''}</textarea>`;
+
+            const isManual = data && data.manualGrading;
+            const correctAnsSectionVisibility = isManual ? 'hidden' : '';
+
+            switch (type) {
+                case 'mcq':
+                    questionHTML += `<div class="space-y-3 options-container correct-answer-section ${correctAnsSectionVisibility}">`;
+                    const options = data ? data.options : ['', '', '', ''];
+                    options.forEach((opt, i) => {
+                        questionHTML += `
+                            <div class="flex items-center group/opt">
+                                <input type="radio" name="correct-${questionId}" value="${i}" class="mr-3 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300" ${data && data.correctAnswer == i ? 'checked' : ''}>
+                                <input type="text" class="w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-blue-400 group-hover/opt:border-blue-300 transition" placeholder="Option ${i+1}" value="${opt}">
+                            </div>`;
+                    });
+                    questionHTML += '</div>';
+                    break;
+                case 'multiple-response':
+                     questionHTML += `<div class="space-y-3 options-container correct-answer-section ${correctAnsSectionVisibility}">`;
+                    const mr_options = data ? data.options : ['', '', '', ''];
+                    const correct_mr_answers = data ? data.correctAnswers : [];
+                    mr_options.forEach((opt, i) => {
+                        questionHTML += `
+                            <div class="flex items-center group/opt">
+                                <input type="checkbox" name="correct-${questionId}" value="${i}" class="mr-3 h-5 w-5 text-cyan-600 focus:ring-cyan-500 rounded border-gray-300" ${correct_mr_answers.includes(i) ? 'checked' : ''}>
+                                <input type="text" class="w-full p-3 bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-cyan-400 group-hover/opt:border-cyan-300 transition" placeholder="Option ${i+1}" value="${opt}">
+                            </div>`;
+                    });
+                    questionHTML += '</div><p class="text-xs text-slate-400 mt-2 correct-answer-section italic">Check all correct answers.</p>';
+                    break;
+                case 'true-false':
+                    const tf_correct = data ? data.correctAnswer : true;
+                    questionHTML += `<div class="flex gap-4 correct-answer-section ${correctAnsSectionVisibility}">
+                        <label class="flex-1 flex items-center justify-center p-4 bg-white border border-slate-200 rounded-xl cursor-pointer hover:border-green-400 hover:bg-green-50 transition has-[:checked]:bg-green-100 has-[:checked]:border-green-500">
+                            <input type="radio" name="correct-${questionId}" value="true" class="mr-2 h-5 w-5 text-green-600 focus:ring-green-500" ${tf_correct === true ? 'checked' : ''}> 
+                            <span class="font-bold text-slate-700">True</span>
+                        </label>
+                        <label class="flex-1 flex items-center justify-center p-4 bg-white border border-slate-200 rounded-xl cursor-pointer hover:border-red-400 hover:bg-red-50 transition has-[:checked]:bg-red-100 has-[:checked]:border-red-500">
+                            <input type="radio" name="correct-${questionId}" value="false" class="mr-2 h-5 w-5 text-red-600 focus:ring-red-500" ${tf_correct === false ? 'checked' : ''}> 
+                            <span class="font-bold text-slate-700">False</span>
+                        </label>
+                    </div>`;
+                    break;
+                case 'numeric':
+                    questionHTML += `<div class="flex items-center gap-4 correct-answer-section ${correctAnsSectionVisibility} bg-white p-4 rounded-xl border border-slate-200">
+                        <div class="flex-1">
+                            <label class="block text-xs font-bold text-slate-500 mb-1">Correct Answer</label>
+                            <input type="number" class="numeric-answer w-full p-2 border border-slate-300 rounded-lg" placeholder="e.g. 42" value="${data ? data.correctAnswer : ''}">
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-xs font-bold text-slate-500 mb-1">Tolerance (+/-)</label>
+                            <input type="number" class="numeric-tolerance w-full p-2 border border-slate-300 rounded-lg" placeholder="e.g. 0.5" value="${data ? data.tolerance : ''}">
+                        </div>
+                    </div>`;
+                    break;
+                case 'fill-blank':
+                    const blanks = data ? data.blanks.join(', ') : '';
+                    questionHTML += `<div class="bg-white p-4 rounded-xl border border-slate-200 space-y-2 correct-answer-section ${correctAnsSectionVisibility}">
+                        <p class="text-sm text-slate-600">Use <code>[blank]</code> in the question text above.</p>
+                        <label class="block text-xs font-bold text-slate-500">Correct words (comma-separated)</label>
+                        <input type="text" class="fill-blank-answers w-full p-2 border border-slate-300 rounded-lg focus:ring-1 focus:ring-pink-400" placeholder="e.g. blue, green" value="${blanks}">
+                    </div>`;
+                    break;
+                case 'matching':
+                    questionHTML += `<div class="matching-container space-y-2 correct-answer-section ${correctAnsSectionVisibility}">
+                        <div class="grid grid-cols-2 gap-4 font-bold text-xs text-slate-500 uppercase">
+                            <span>Prompt</span>
+                            <span>Correct Answer</span>
+                        </div>
+                    `;
+                    const pairs = data ? data.pairs : [{prompt: '', answer: ''}, {prompt: '', answer: ''}];
+                    pairs.forEach((pair, index) => {
+                        questionHTML += `
+                            <div class="matching-pair grid grid-cols-2 gap-4">
+                                <input type="text" class="w-full p-2.5 bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-teal-500" placeholder="Prompt ${index + 1}" value="${pair.prompt}">
+                                <input type="text" class="w-full p-2.5 bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-teal-500" placeholder="Answer ${index + 1}" value="${pair.answer}">
+                            </div>`;
+                    });
+                    questionHTML += `</div><button type="button" onclick="addMatchingPair('${questionId}')" class="mt-3 text-sm bg-teal-50 text-teal-700 hover:bg-teal-100 font-semibold py-2 px-4 rounded-lg transition correct-answer-section ${correctAnsSectionVisibility}">+ Add Pair</button>`;
+                    break;
+                case 'short': case 'long':
+                     questionHTML += `<div class="p-4 bg-indigo-50 border border-indigo-100 text-indigo-800 rounded-xl text-sm flex items-start gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mt-0.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
+                        <span>Graded by AI by default. Check "Manual Grading" to override.</span>
+                     </div>`;
+                    break;
+            }
+            questionHTML += '</div>';
+            container.insertAdjacentHTML('beforeend', questionHTML);
+        };
+       
+        const saveExam = async () => {
+            const title = document.getElementById('exam-title').value;
+            const timeLimit = parseInt(document.getElementById('time-limit').value, 10);
+            if (!title) { showAlert("Missing Info", "Please enter an exam title."); return; }
+           
+            const questions = [];
+            const questionDivs = document.querySelectorAll('#questions-container > div');
+            
+            questionDivs.forEach(qDiv => {
+                const type = qDiv.dataset.type;
+                const manualGradingCheckbox = qDiv.querySelector('.manual-grade-check');
+                const isManual = manualGradingCheckbox && manualGradingCheckbox.checked;
+
+                const question = {
+                    type: type,
+                    text: qDiv.querySelector('textarea').value,
+                    points: parseInt(qDiv.querySelector('input[type="number"]').value, 10) || 10,
+                    manualGrading: isManual
+                };
+
+                if (!isManual) {
+                    switch (question.type) {
+                        case 'mcq':
+                            question.options = Array.from(qDiv.querySelectorAll('.options-container input[type="text"]')).map(opt => opt.value);
+                            const correctRadio = qDiv.querySelector('input[type="radio"]:checked');
+                            question.correctAnswer = correctRadio ? parseInt(correctRadio.value, 10) : -1;
+                            break;
+                        case 'multiple-response':
+                            question.options = Array.from(qDiv.querySelectorAll('.options-container input[type="text"]')).map(opt => opt.value);
+                            question.correctAnswers = Array.from(qDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value, 10));
+                            break;
+                        case 'true-false':
+                            const tfRadio = qDiv.querySelector('input[type="radio"]:checked');
+                            question.correctAnswer = tfRadio ? (tfRadio.value === 'true') : null;
+                            break;
+                        case 'numeric':
+                            question.correctAnswer = parseFloat(qDiv.querySelector('.numeric-answer').value);
+                            question.tolerance = parseFloat(qDiv.querySelector('.numeric-tolerance').value) || 0;
+                            break;
+                        case 'fill-blank':
+                            question.blanks = qDiv.querySelector('.fill-blank-answers').value.split(',').map(s => s.trim().toLowerCase()).filter(s => s);
+                            break;
+                        case 'matching':
+                            question.pairs = [];
+                            qDiv.querySelectorAll('.matching-pair').forEach(pairEl => {
+                                const inputs = pairEl.querySelectorAll('input[type="text"]');
+                                if (inputs[0].value && inputs[1].value) {
+                                    question.pairs.push({ prompt: inputs[0].value, answer: inputs[1].value });
+                                }
+                            });
+                            break;
+                    }
+                }
+                questions.push(question);
+            });
+
+            if(questions.length === 0){ showAlert("No Questions", "Please add at least one question to the exam."); return; }
+
+            const button = document.getElementById('save-exam-button');
+            button.innerText = 'Saving...';
+            button.disabled = true;
+
+            try {
+                const examData = { title, timeLimit, questions, creatorId: currentUser.uid };
+                if (currentExamId) {
+                    await db.collection("exams").doc(currentExamId).set(examData);
+                } else {
+                    const newExamCode = generateExamCode();
+                    await db.collection("exams").doc(newExamCode).set(examData);
+                }
+                showToast("Exam saved successfully!", 'success');
+                showView('app-dashboard-view');
+                loadExams();
+            } catch(e) {
+                console.error(e);
+                showToast("Failed to save exam.", 'error');
+            } finally {
+                button.innerText = 'Save Exam';
+                button.disabled = false;
+            }
+        };
+
+        // --- Student Flow ---
+        const joinExam = async () => {
+            const examCode = document.getElementById('exam-code-input').value.trim().toUpperCase();
+            const studentName = document.getElementById('student-name').value.trim();
+            if (!examCode || !studentName) { showAlert("Incomplete Info", "Please enter your name and an exam code."); return; }
+
+            const docRef = db.collection("exams").doc(examCode);
+            const docSnap = await docRef.get();
+
+            if (docSnap.exists) {
+                // Change ID generation to use Auth UID for persistence
+                const studentId = currentUser.uid;
+                
+                localStorage.setItem('currentStudentId', studentId);
+                localStorage.setItem('currentExamCode', examCode);
+                localStorage.setItem('currentStudentName', studentName);
+                const exam = docSnap.data();
+                localStorage.setItem('currentExamData', JSON.stringify(exam));
+
+                document.getElementById('student-exam-title').innerText = exam.title;
+                document.getElementById('student-name-display').innerText = `Student: ${studentName}`;
+               
+                document.getElementById('chat-container').classList.add('closed');
+               
+                const questionsContainer = document.getElementById('student-questions-container');
+                questionsContainer.innerHTML = '';
+                exam.questions.forEach((q, index) => {
+                    let questionHTML = `
+                        <div class="p-6 rounded-2xl bg-slate-50 border border-slate-100 shadow-sm" data-index="${index}" data-type="${q.type}">
+                            <div class="flex items-start gap-4 mb-4">
+                                <span class="bg-slate-200 text-slate-700 w-8 h-8 rounded-full flex items-center justify-center font-bold flex-shrink-0">${index + 1}</span>
+                                <div>
+                                    <p class="text-xl font-medium text-slate-800 leading-relaxed">${q.text}</p>
+                                    <span class="text-sm font-semibold text-slate-400 mt-1 inline-block">${q.points} points</span>
+                                </div>
+                            </div>
+                            <div class="pl-12">`;
+                            
+                    switch (q.type) {
+                        case 'mcq':
+                            questionHTML += `<div class="space-y-3">`;
+                            q.options.forEach((opt, i) => {
+                                questionHTML += `<label class="flex items-center p-4 bg-white border border-slate-200 rounded-xl hover:bg-blue-50 hover:border-blue-200 cursor-pointer transition-all has-[:checked]:bg-blue-50 has-[:checked]:border-blue-400 has-[:checked]:shadow-md">
+                                    <input type="radio" name="answer-${index}" value="${i}" class="h-5 w-5 mr-4 text-primary focus:ring-primary border-slate-300">
+                                    <span class="text-slate-700 font-medium">${opt}</span>
+                                </label>`;
+                            });
+                            questionHTML += `</div>`;
+                            break;
+                        case 'multiple-response':
+                            questionHTML += `<div class="space-y-3">`;
+                            q.options.forEach((opt, i) => {
+                                questionHTML += `<label class="flex items-center p-4 bg-white border border-slate-200 rounded-xl hover:bg-cyan-50 hover:border-cyan-200 cursor-pointer transition-all has-[:checked]:bg-cyan-50 has-[:checked]:border-cyan-400 has-[:checked]:shadow-md">
+                                    <input type="checkbox" name="answer-${index}" value="${i}" class="h-5 w-5 mr-4 text-cyan-600 focus:ring-cyan-500 rounded border-slate-300">
+                                    <span class="text-slate-700 font-medium">${opt}</span>
+                                </label>`;
+                            });
+                            questionHTML += `</div>`;
+                            break;
+                        case 'true-false':
+                            questionHTML += `<div class="grid grid-cols-2 gap-4">`;
+                            questionHTML += `<label class="flex items-center justify-center p-4 bg-white border border-slate-200 rounded-xl hover:bg-green-50 hover:border-green-200 cursor-pointer transition-all has-[:checked]:bg-green-100 has-[:checked]:border-green-500">
+                                <input type="radio" name="answer-${index}" value="true" class="h-5 w-5 mr-3 text-green-600 focus:ring-green-500">
+                                <span class="text-slate-700 font-bold">True</span>
+                            </label>`;
+                            questionHTML += `<label class="flex items-center justify-center p-4 bg-white border border-slate-200 rounded-xl hover:bg-red-50 hover:border-red-200 cursor-pointer transition-all has-[:checked]:bg-red-100 has-[:checked]:border-red-500">
+                                <input type="radio" name="answer-${index}" value="false" class="h-5 w-5 mr-3 text-red-600 focus:ring-red-500">
+                                <span class="text-slate-700 font-bold">False</span>
+                            </label>`;
+                            questionHTML += `</div>`;
+                            break;
+                        case 'numeric':
+                            questionHTML += `<input type="number" step="any" placeholder="Enter numeric answer..." class="w-full sm:w-1/2 p-4 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:outline-none transition">`;
+                            break;
+                        case 'fill-blank':
+                            const blankedText = q.text.replace(/\[blank\]/g, () => `<input type="text" class="inline-block w-40 p-1 mx-1 border-b-2 border-slate-300 focus:border-pink-500 focus:outline-none bg-transparent font-bold text-center text-slate-800">`);
+                            questionHTML = `<div class="p-6 rounded-2xl bg-white border border-slate-100 shadow-sm" data-index="${index}" data-type="${q.type}">
+                                <div class="flex items-center gap-2 mb-4"><span class="bg-pink-100 text-pink-600 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">${index+1}</span></div>
+                                <div class="text-xl leading-loose text-slate-800">${blankedText}</div>
+                                <span class="text-sm font-semibold text-slate-400 mt-4 inline-block">${q.points} points</span>
+                            </div>`; // Override container for better flow
+                            break;
+                        case 'matching':
+                            const prompts = q.pairs.map(p => p.prompt);
+                            const answers = [...q.pairs.map(p => p.answer)].sort(() => Math.random() - 0.5);
+                            questionHTML += `<div class="grid grid-cols-1 gap-3">`;
+                            prompts.forEach((prompt, i) => {
+                                questionHTML += `
+                                    <div class="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200">
+                                        <span class="font-medium text-slate-700 w-1/2 pr-4">${prompt}</span>
+                                        <select class="w-1/2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 focus:outline-none text-sm">
+                                            <option value="">Choose match...</option>
+                                            ${answers.map(ans => `<option value="${ans}">${ans}</option>`).join('')}
+                                        </select>
+                                    </div>
+                                `;
+                            });
+                            questionHTML += `</div>`;
+                            break;
+                        case 'short':
+                            questionHTML += `<textarea rows="2" placeholder="Your answer..." class="w-full p-4 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-none transition resize-none"></textarea>`;
+                            break;
+                        case 'long':
+                            questionHTML += `<textarea rows="4" placeholder="Type your detailed answer here..." class="w-full p-4 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 focus:outline-none transition resize-none"></textarea>`;
+                            break;
+                    }
+                    questionHTML += `</div></div>`; // Close pl-12 and outer div
+                    questionsContainer.innerHTML += questionHTML;
+                });
+                startTimer(exam.timeLimit);
+                startChatListener(examCode, studentId);
+                showView('exam-taking-view');
+            } else {
+                showAlert("Error", "Invalid exam code. Please check and try again.");
+            }
+        };
+
+        function startTimer(minutes) {
+            let seconds = minutes * 60;
+            const timerEl = document.getElementById('timer');
+            if (examTimerInterval) clearInterval(examTimerInterval);
+            examTimerInterval = setInterval(() => {
+                const min = Math.floor(seconds / 60);
+                const sec = seconds % 60;
+                timerEl.textContent = `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+                
+                if (seconds < 60) {
+                    timerEl.classList.add('text-red-600', 'animate-ping'); // Visual urgency
+                }
+                
+                seconds--;
+                if (seconds < 0) {
+                    clearInterval(examTimerInterval);
+                    showToast("Time's up! Submitting exam...", 'info');
+                    submitExam();
+                }
+            }, 1000);
+        }
+
+        async function evaluateWithAI(question, answer) {
+            const pipedreamUrl = "https://eost4t92gmnlal8.m.pipedream.net";
+            const fullPrompt = `The following is a question from an exam and a student's answer to it. Question: "${question}". Student's Answer: "${answer}". Please act as an AI grader. Evaluate the student's answer based on the question. Provide a score from 0.0 (completely incorrect) to 1.0 (perfectly correct). Also, provide brief, constructive feedback. Your response MUST be ONLY a valid JSON object in the format: {"score": <number>, "feedback": "<string>"}. Do not include any other text, greetings, or explanations outside of the JSON object.`;
+           
+            try {
+                const response = await fetch(pipedreamUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: fullPrompt, answer: answer })
+                });
+
+                const responseText = await response.text();
+                if (!response.ok) throw new Error("API Error");
+               
+                const jsonMatch = responseText.match(/\{.*\}/s);
+                if (jsonMatch && jsonMatch[0]) {
+                    return JSON.parse(jsonMatch[0]);
+                } else {
+                    return { score: 0, feedback: "AI grading unavailable." };
+                }
+            } catch (error) {
+                console.error("AI Grading Error:", error);
+                return { score: 0, feedback: "AI grading failed." };
+            }
+        }
+       
+        const submitExam = async () => {
+             const confirmed = await showConfirm("Submit Exam?", "Are you sure you are ready to submit your answers?");
+             if (!confirmed) return;
+
+            if(examTimerInterval) clearInterval(examTimerInterval);
+            if(chatUnsubscribe) chatUnsubscribe();
+
+            document.getElementById('chat-wrapper').classList.add('view-hidden');
+           
+            showView('results-view');
+            document.getElementById('results-loader').classList.remove('view-hidden');
+            document.getElementById('results-details-container').innerHTML = '';
+            document.getElementById('results-summary').innerText = '';
+
+            const examData = JSON.parse(localStorage.getItem('currentExamData'));
+            const studentId = localStorage.getItem('currentStudentId');
+            const studentName = localStorage.getItem('currentStudentName');
+
+            const submissionAnswers = [];
+            const gradingPromises = examData.questions.map((question, i) => {
+                const qDiv = document.querySelector(`#student-questions-container > div[data-index="${i}"]`);
+                let studentAnswer;
+                // Logic extraction remains same
+                switch(question.type) {
+                    case 'mcq':
+                        const checkedRadio = qDiv.querySelector('input[type="radio"]:checked');
+                        studentAnswer = checkedRadio ? parseInt(checkedRadio.value, 10) : null;
+                        break;
+                    case 'multiple-response':
+                        studentAnswer = Array.from(qDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value, 10));
+                        break;
+                    case 'true-false':
+                        const tfCheckedRadio = qDiv.querySelector('input[type="radio"]:checked');
+                        studentAnswer = tfCheckedRadio ? (tfCheckedRadio.value === 'true') : null;
+                        break;
+                    case 'numeric':
+                        const numInput = qDiv.querySelector('input[type="number"]');
+                        studentAnswer = numInput.value !== '' ? parseFloat(numInput.value) : null;
+                        break;
+                    case 'fill-blank':
+                        studentAnswer = Array.from(qDiv.querySelectorAll('input[type="text"]')).map(inp => inp.value.trim());
+                        break;
+                    case 'matching':
+                        studentAnswer = Array.from(qDiv.querySelectorAll('select')).map(select => select.value);
+                        break;
+                    case 'short':
+                    case 'long':
+                        studentAnswer = qDiv.querySelector('textarea').value;
+                        break;
+                }
+               
+                const answerData = {
+                    questionText: question.text,
+                    studentAnswer: studentAnswer,
+                    maxPoints: question.points,
+                    isManual: question.manualGrading
+                };
+
+                if (question.manualGrading) {
+                    answerData.score = null;
+                    answerData.feedback = 'Pending manual grading';
+                    submissionAnswers[i] = answerData;
+                    return Promise.resolve();
+                } else if (question.type === 'short' || question.type === 'long') {
+                    return evaluateWithAI(question.text, studentAnswer || "").then(aiResult => {
+                        answerData.score = aiResult.score * question.points;
+                        answerData.feedback = aiResult.feedback;
+                        submissionAnswers[i] = answerData;
+                    });
+                } else {
+                    let isCorrect = false;
+                    const correctFeedback = 'Correct';
+                    let incorrectFeedback = 'Incorrect';
+
+                    switch (question.type) {
+                        case 'mcq':
+                            isCorrect = studentAnswer === question.correctAnswer;
+                            if (!isCorrect && question.options && question.correctAnswer >= 0 && question.options[question.correctAnswer]) {
+                                incorrectFeedback = `Incorrect. Answer: ${question.options[question.correctAnswer]}`;
+                            }
+                            break;
+                        case 'true-false':
+                            isCorrect = studentAnswer === question.correctAnswer;
+                            break;
+                        case 'multiple-response':
+                            if (studentAnswer && question.correctAnswers) {
+                                const correctSet = new Set(question.correctAnswers);
+                                const studentSet = new Set(studentAnswer);
+                                isCorrect = correctSet.size === studentSet.size && [...correctSet].every(item => studentSet.has(item));
+                            }
+                            break;
+                        case 'numeric':
+                             if (studentAnswer !== null) {
+                                const tolerance = question.tolerance || 0;
+                                isCorrect = Math.abs(studentAnswer - question.correctAnswer) <= tolerance;
+                            }
+                            break;
+                        case 'fill-blank':
+                            if (studentAnswer && studentAnswer.length === question.blanks.length) {
+                                isCorrect = studentAnswer.every((ans, i) => ans.trim().toLowerCase() === question.blanks[i]);
+                            }
+                            break;
+                        case 'matching':
+                             if (studentAnswer && studentAnswer.length === question.pairs.length) {
+                                isCorrect = studentAnswer.every((ans, index) => ans === question.pairs[index].answer);
+                            }
+                            break;
+                    }
+                    answerData.score = isCorrect ? question.points : 0;
+                    answerData.feedback = isCorrect ? correctFeedback : incorrectFeedback;
+                    submissionAnswers[i] = answerData;
+                    return Promise.resolve();
+                }
+            });
+
+            await Promise.all(gradingPromises);
+            
+            // Calculate scores before rendering to save correct total
+            let earnedScore = 0;
+            let totalPossibleScore = 0;
+            submissionAnswers.forEach(result => {
+                totalPossibleScore += result.maxPoints;
+                if(result.score !== null) earnedScore += result.score;
+            });
+
+            const examCode = localStorage.getItem('currentExamCode');
+            const submissionData = {
+                studentId, studentName,
+                answers: submissionAnswers,
+                totalScore: earnedScore,
+                maxScore: totalPossibleScore,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            await db.collection("exams").doc(examCode).collection("submissions").doc(studentId).set(submissionData);
+
+            // Use the unified render function
+            renderResultsUI(submissionAnswers);
+        };
+
+        // Unified Results Renderer
+        function renderResultsUI(answers) {
+            let earnedScore = 0;
+            let totalPossibleScore = 0;
+            let hasPending = false;
+            const resultsDetailsContainer = document.getElementById('results-details-container');
+            resultsDetailsContainer.innerHTML = '';
+
+            answers.forEach((result, i) => {
+                totalPossibleScore += result.maxPoints;
+                if (result.score !== null) {
+                    earnedScore += result.score;
+                } else {
+                    hasPending = true;
+                }
+
+                let answerDisplay = '';
+                if (result.studentAnswer !== null && result.studentAnswer !== undefined) {
+                    answerDisplay = Array.isArray(result.studentAnswer) ? result.studentAnswer.join(', ') : result.studentAnswer;
+                } else {
+                    answerDisplay = "No answer provided";
+                }
+
+                const scoreText = result.score !== null ? `${result.score.toFixed(1)} / ${result.maxPoints}` : `Pending`;
+                const borderColor = result.score === null ? 'border-yellow-200 bg-yellow-50' : (result.score > 0 ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50');
+                const textColor = result.score === null ? 'text-yellow-700' : (result.score > 0 ? 'text-green-700' : 'text-red-700');
+
+                const resultCard = `
+                    <div class="p-6 border rounded-2xl bg-white shadow-sm transition hover:shadow-md">
+                        <div class="flex gap-4">
+                            <span class="text-slate-400 font-bold">${i + 1}.</span>
+                            <div class="flex-1">
+                                <p class="font-medium text-lg text-slate-800 mb-2">${result.questionText}</p>
+                                <div class="bg-slate-50 p-3 rounded-lg border border-slate-100 text-slate-600 mb-4">
+                                    <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-1">Your Answer</span>
+                                    ${answerDisplay}
+                                </div>
+                                <div class="p-4 rounded-xl ${borderColor} flex justify-between items-center">
+                                    <div>
+                                        <p class="font-bold ${textColor}">Score: ${scoreText}</p>
+                                        <p class="text-sm opacity-90 ${textColor}">${result.feedback}</p>
+                                    </div>
+                                    ${result.score > 0 ? '<svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>' : (result.score === 0 ? '<svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>' : '')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                resultsDetailsContainer.innerHTML += resultCard;
+            });
+
+            const percentage = totalPossibleScore > 0 ? ((earnedScore / totalPossibleScore) * 100).toFixed(1) : 0;
+
+            document.getElementById('results-loader').classList.add('view-hidden');
+            let summaryText = `You scored ${earnedScore.toFixed(1)} out of ${totalPossibleScore} (${percentage}%)`;
+            if (hasPending) {
+                summaryText += ". Some questions are pending manual grading.";
+            }
+            document.getElementById('results-summary').innerText = summaryText;
+            showView('results-view');
+        }
+
+        // New function to check results later
+        async function checkStudentResults() {
+            const examCode = document.getElementById('exam-code-input').value.trim().toUpperCase();
+            if (!examCode) {
+                showToast("Please enter the exam code.", 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('check-results-button');
+            const originalContent = btn.innerHTML;
+            btn.innerHTML = '<span class="loader w-5 h-5 border-2 border-slate-400 border-t-slate-800 inline-block"></span>';
+            btn.disabled = true;
+
+            try {
+                const studentId = currentUser.uid;
+                const docRef = db.collection("exams").doc(examCode).collection("submissions").doc(studentId);
+                const docSnap = await docRef.get();
+
+                if (!docSnap.exists) {
+                    showToast("No submission found for this code.", 'info');
+                } else {
+                    const data = docSnap.data();
+                    renderResultsUI(data.answers);
+                    showToast("Results loaded.", 'success');
+                }
+            } catch (error) {
+                console.error(error);
+                showToast("Error retrieving results.", 'error');
+            } finally {
+                btn.innerHTML = originalContent;
+                btn.disabled = false;
+            }
+        }
+       
+        const viewResults = async (examId) => {
+            currentExamId = examId;
+            const examRef = db.collection("exams").doc(examId);
+            const examSnap = await examRef.get();
+            const examTitle = examSnap.exists ? examSnap.data().title : "Results";
+           
+            document.getElementById('teacher-results-heading').innerText = `Submissions: ${examTitle}`;
+            showView('teacher-results-view');
+            const submissionListEl = document.getElementById('submission-list');
+            submissionListEl.innerHTML = '<div class="loader"></div>';
+
+            const submissionsCol = db.collection("exams").doc(examId).collection("submissions");
+            const snapshot = await submissionsCol.get();
+
+            if (snapshot.empty) {
+                submissionListEl.innerHTML = `
+                    <div class="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
+                        <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        <p class="mt-2 text-slate-500">No submissions received yet.</p>
+                    </div>`;
+                return;
+            }
+
+            submissionListEl.innerHTML = '';
+            snapshot.forEach(doc => {
+                const sub = doc.data();
+                 const percentage = sub.maxScore > 0 ? ((sub.totalScore / sub.maxScore) * 100).toFixed(1) : 0;
+                const submissionCard = `
+                    <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4 hover:shadow-md transition">
+                        <div class="flex items-center gap-4">
+                             <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-600">${sub.studentName.charAt(0)}</div>
+                             <div>
+                                <p class="font-bold text-lg text-slate-800">${sub.studentName}</p>
+                                 <p class="text-xs text-slate-400">Submitted: ${sub.timestamp ? new Date(sub.timestamp.toDate()).toLocaleString() : 'Just now'}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-6">
+                            <div class="text-right">
+                                <p class="font-bold text-xl text-primary">${sub.totalScore.toFixed(1)} <span class="text-sm text-slate-400 font-normal">/ ${sub.maxScore}</span></p>
+                                <div class="w-24 bg-slate-200 rounded-full h-1.5 mt-1 overflow-hidden">
+                                    <div class="bg-primary h-1.5 rounded-full" style="width: ${percentage}%"></div>
+                                </div>
+                            </div>
+                            <button data-submission-id="${doc.id}" class="grade-submission-btn bg-slate-800 text-white font-semibold py-2 px-5 rounded-xl hover:bg-slate-900 transition shadow-lg shadow-slate-500/20">Review</button>
+                        </div>
+                    </div>
+                `;
+                submissionListEl.innerHTML += submissionCard;
+            });
+        };
+       
+        // --- Manual Grading Functions ---
+        const gradeStudentSubmission = async (submissionId) => {
+            const submissionRef = db.collection("exams").doc(currentExamId).collection("submissions").doc(submissionId);
+            const submissionSnap = await submissionRef.get();
+            if (!submissionSnap.exists) {
+                showToast("Submission not found!", 'error');
+                return;
+            }
+
+            const submission = submissionSnap.data();
+            const maxScore = submission.maxScore;
+            const currentTotal = submission.totalScore;
+
+            document.getElementById('manual-grading-heading').innerText = `Grading: ${submission.studentName}`;
+            document.getElementById('manual-grading-summary').innerText = `Total: ${currentTotal.toFixed(1)} / ${maxScore}`;
+
+            const container = document.getElementById('manual-grading-container');
+            container.innerHTML = '';
+
+            submission.answers.forEach((ans, index) => {
+                let answerDisplay = ans.studentAnswer !== null && ans.studentAnswer !== undefined ? (Array.isArray(ans.studentAnswer) ? ans.studentAnswer.join(', ') : ans.studentAnswer) : "No answer provided";
+                
+                let gradingControls = '';
+                if(ans.isManual) {
+                     gradingControls = `
+                        <div class="mt-4 p-4 rounded-xl bg-yellow-50 border border-yellow-200 flex flex-wrap items-center gap-4">
+                            <label class="font-bold text-yellow-800">Assign Score:</label>
+                            <div class="flex items-center gap-2">
+                                <input type="number" value="${ans.score !== null ? ans.score : ''}" min="0" max="${ans.maxPoints}" class="w-24 p-2 bg-white border border-yellow-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 text-center font-bold">
+                                <span class="text-yellow-600 font-medium">/ ${ans.maxPoints}</span>
+                            </div>
+                            <button data-index="${index}" class="save-grade-btn ml-auto bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600 shadow-sm transition">Save Grade</button>
+                        </div>
+                     `;
+                } else {
+                    gradingControls = `
+                         <div class="mt-4 p-3 rounded-xl ${ans.score > 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}">
+                            <div class="flex justify-between items-center">
+                                <p class="font-bold text-lg ${ans.score > 0 ? 'text-green-700' : 'text-red-700'}">${ans.score.toFixed(1)} <span class="text-sm opacity-70">/ ${ans.maxPoints}</span></p>
+                                <span class="text-sm font-medium ${ans.score > 0 ? 'text-green-600' : 'text-red-600'}">${ans.feedback}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                const questionCard = `
+                    <div class="p-6 border border-slate-200 rounded-2xl bg-white shadow-sm">
+                        <p class="font-semibold text-lg text-slate-800 mb-2"><span class="text-slate-400 mr-2">Q${index+1}</span> ${ans.questionText}</p>
+                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 text-slate-700 font-medium">
+                            ${answerDisplay}
+                        </div>
+                        ${gradingControls}
+                    </div>
+                `;
+                container.innerHTML += questionCard;
+            });
+           
+            container.dataset.submissionId = submissionId; // Store for saving
+            showView('manual-grading-view');
+        };
+       
+        const saveManualGrade = async (e) => {
+             const button = e.target;
+            if (!button || !button.classList.contains('save-grade-btn')) return;
+
+            const questionIndex = parseInt(button.dataset.index, 10);
+            const scoreInput = button.parentElement.querySelector('input[type="number"]');
+            const newScore = parseFloat(scoreInput.value);
+            const submissionId = document.getElementById('manual-grading-container').dataset.submissionId;
+
+            const submissionRef = db.collection("exams").doc(currentExamId).collection("submissions").doc(submissionId);
+            const submissionSnap = await submissionRef.get();
+            const submission = submissionSnap.data();
+           
+            const maxPoints = submission.answers[questionIndex].maxPoints;
+
+            if (isNaN(newScore) || newScore < 0 || newScore > maxPoints) {
+                showToast(`Score must be between 0 and ${maxPoints}`, 'error');
+                return;
+            }
+
+            button.innerText = 'Saving...';
+            submission.answers[questionIndex].score = newScore;
+            submission.answers[questionIndex].feedback = `Manually graded.`;
+
+            // Recalculate total score
+            let newTotalScore = 0;
+            submission.answers.forEach(ans => {
+                if(ans.score !== null) {
+                    newTotalScore += ans.score;
+                }
+            });
+            submission.totalScore = newTotalScore;
+
+            await submissionRef.update(submission);
+
+            document.getElementById('manual-grading-summary').innerText = `Total: ${newTotalScore.toFixed(1)} / ${submission.maxScore}`;
+            
+            // UI Feedback
+            const container = scoreInput.closest('div.bg-yellow-50');
+            container.classList.remove('bg-yellow-50', 'border-yellow-200');
+            container.classList.add('bg-green-50', 'border-green-200');
+            
+            button.innerText = 'Saved ✓';
+            button.classList.remove('bg-yellow-500', 'hover:bg-yellow-600');
+            button.classList.add('bg-green-500', 'hover:bg-green-600');
+            
+            showToast("Grade updated successfully.");
+            
+            setTimeout(() => {
+                button.innerText = 'Save Grade';
+                 button.classList.add('bg-yellow-500', 'hover:bg-yellow-600');
+                 button.classList.remove('bg-green-500', 'hover:bg-green-600');
+                 container.classList.add('bg-yellow-50', 'border-yellow-200');
+                 container.classList.remove('bg-green-50', 'border-green-200');
+            }, 2000);
+        };
+
+
+        // --- Chat Functions ---
+        const openChat = () => {
+            const chatContainer = document.getElementById('chat-container');
+            const chatTab = document.getElementById('chat-tab');
+            chatContainer.classList.remove('closed');
+            chatTab.classList.add('translate-x-full'); // Hide tab when panel is open
+             const notificationBadge = document.getElementById('chat-notification');
+            notificationBadge.classList.add('view-hidden');
+            notificationBadge.classList.remove('notification-pulse');
+        };
+
+        const closeChat = () => {
+            const chatContainer = document.getElementById('chat-container');
+            const chatTab = document.getElementById('chat-tab');
+            chatContainer.classList.add('closed');
+            chatTab.classList.remove('translate-x-full'); // Show tab when panel is closed
+        };
+
+        function renderMessages(containerEl, messages, currentUserId) {
+            containerEl.innerHTML = '';
+            if (!messages || messages.length === 0) {
+                containerEl.innerHTML = '<div class="text-center mt-10"><p class="text-slate-400 text-sm">No messages yet.</p></div>';
+                return;
+            }
+            messages.forEach(msg => {
+                const isSender = msg.senderId === currentUserId;
+                const msgAlign = isSender ? 'items-end' : 'items-start';
+                
+                let bubbleClass = isSender 
+                    ? 'bg-primary text-white rounded-br-none' 
+                    : 'bg-white border border-slate-200 text-slate-700 rounded-bl-none shadow-sm';
+                
+                if(msg.isAnnouncement) {
+                    bubbleClass = 'bg-amber-100 border border-amber-200 text-amber-900 w-full text-center rounded-xl';
+                }
+               
+                const messageHTML = `
+                    <div class="flex flex-col ${msg.isAnnouncement ? 'items-center' : msgAlign} w-full animate-fade-in">
+                         ${!msg.isAnnouncement ? `<span class="text-[10px] text-slate-400 mb-1 px-1">${msg.senderName} • ${new Date(msg.timestamp?.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>` : ''}
+                        <div class="px-4 py-2.5 rounded-2xl max-w-[85%] text-sm leading-relaxed ${bubbleClass}">
+                             ${msg.isAnnouncement ? '<span class="font-bold block text-xs uppercase mb-1">📢 Announcement</span>' : ''}
+                            ${msg.text}
+                        </div>
+                    </div>`;
+                containerEl.innerHTML += messageHTML;
+            });
+            containerEl.scrollTop = containerEl.scrollHeight;
+        }
+
+        async function startChatListener(examId, studentId) {
+            if (chatUnsubscribe) chatUnsubscribe();
+            lastMessageTimestamp = null; // Reset for new session
+            const chatQuery = db.collection("exams").doc(examId).collection("chat");
+            chatUnsubscribe = chatQuery.onSnapshot((querySnapshot) => {
+                const messages = [];
+                let latestTimestamp = null;
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    messages.push({ id: doc.id, ...data });
+                    if (!latestTimestamp || data.timestamp > latestTimestamp) {
+                        latestTimestamp = data.timestamp;
+                    }
+                });
+
+                const relevantMessages = messages.filter(m => m.isAnnouncement || m.studentId === studentId)
+                                                .sort((a,b) => a.timestamp - b.timestamp);
+               
+                const chatContainer = document.getElementById('chat-messages');
+                renderMessages(chatContainer, relevantMessages, studentId);
+               
+                // Notification logic
+                const chatPanel = document.getElementById('chat-container');
+                if (chatPanel.classList.contains('closed') && latestTimestamp && (!lastMessageTimestamp || latestTimestamp.toMillis() > lastMessageTimestamp.toMillis())) {
+                    const notificationBadge = document.getElementById('chat-notification');
+                    notificationBadge.classList.remove('view-hidden');
+                    notificationBadge.classList.add('notification-pulse');
+                    showToast("New message from Instructor", 'info');
+                }
+                lastMessageTimestamp = latestTimestamp;
+            });
+        }
+       
+        const sendStudentMessage = async () => {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const examId = localStorage.getItem('currentExamCode');
+            const studentId = localStorage.getItem('currentStudentId');
+            const studentName = localStorage.getItem('currentStudentName');
+
+            const chatCol = db.collection("exams").doc(examId).collection("chat");
+            await chatCol.add({
+                text, studentId, senderId: studentId, senderName: studentName, timestamp: firebase.firestore.FieldValue.serverTimestamp(), isAnnouncement: false
+            });
+            input.value = '';
+        };
+
+        const openTeacherChat = (examId) => {
+            showView('teacher-chat-view');
+            document.getElementById('teacher-chat-panel').innerHTML = '<div class="h-full flex flex-col items-center justify-center text-slate-400"><p>Select a student from the sidebar</p></div>';
+            document.getElementById('teacher-reply-area').classList.add('view-hidden');
+            activeTeacherChatExamId = examId;
+
+            if (chatUnsubscribe) chatUnsubscribe();
+            const chatQuery = db.collection("exams").doc(examId).collection("chat");
+            chatUnsubscribe = chatQuery.onSnapshot((snapshot) => {
+                allChatMessages = [];
+                snapshot.forEach(doc => allChatMessages.push({ id: doc.id, ...doc.data() }));
+                allChatMessages.sort((a, b) => a.timestamp - b.timestamp);
+
+                const studentListEl = document.getElementById('chat-student-list');
+                const students = {};
+                allChatMessages.forEach(msg => {
+                    if(msg.studentId && !msg.isAnnouncement) {
+                         students[msg.studentId] = { name: 'Loading...', timestamp: msg.timestamp };
+                    }
+                });
+                allChatMessages.forEach(msg => {
+                    if (students[msg.studentId] && msg.senderId === msg.studentId) {
+                        students[msg.studentId].name = msg.senderName;
+                    }
+                });
+
+                studentListEl.innerHTML = '';
+                if (Object.keys(students).length === 0) {
+                    studentListEl.innerHTML = '<p class="text-slate-400 text-sm text-center py-4">No active chats.</p>';
+                } else {
+                    const sortedStudents = Object.entries(students).sort(([,a], [,b]) => b.timestamp - a.timestamp);
+                    for (const [id, data] of sortedStudents) {
+                         const studentDiv = document.createElement('div');
+                         const isActive = activeTeacherChatStudentId === id;
+                         studentDiv.className = `p-3 rounded-xl cursor-pointer transition flex items-center gap-3 ${isActive ? 'bg-primary text-white shadow-md' : 'bg-white hover:bg-slate-50 border border-slate-100 text-slate-700'}`;
+                         studentDiv.innerHTML = `
+                            <div class="w-8 h-8 rounded-full ${isActive ? 'bg-white/20' : 'bg-slate-200'} flex items-center justify-center text-xs font-bold">${data.name.charAt(0)}</div>
+                            <div class="overflow-hidden"><p class="truncate text-sm font-semibold">${data.name}</p></div>
+                         `;
+                         studentDiv.onclick = () => selectStudentForChat(id, data.name);
+                         studentListEl.appendChild(studentDiv);
+                    }
+                }
+
+                if(activeTeacherChatStudentId){
+                    selectStudentForChat(activeTeacherChatStudentId, students[activeTeacherChatStudentId]?.name);
+                }
+            });
+        };
+
+        const closeTeacherChat = () => {
+            if (chatUnsubscribe) chatUnsubscribe();
+            chatUnsubscribe = null;
+            activeTeacherChatExamId = null;
+            activeTeacherChatStudentId = null;
+            allChatMessages = [];
+            showView('app-dashboard-view');
+        };
+       
+        const selectStudentForChat = (studentId, studentName) => {
+            activeTeacherChatStudentId = studentId;
+             if (!studentName) return; 
+            document.getElementById('teacher-reply-area').classList.remove('view-hidden');
+           
+            // Visual feedback handled by redraw in listener, but we can instant-update styles if needed
+            const relevantMessages = allChatMessages.filter(m => m.isAnnouncement || m.studentId === studentId);
+            const chatContainer = document.getElementById('teacher-chat-panel');
+            renderMessages(chatContainer, relevantMessages, currentUser.uid);
+        };
+
+        const sendTeacherReply = async () => {
+            const input = document.getElementById('teacher-chat-input');
+            const text = input.value.trim();
+            if (!text || !activeTeacherChatExamId || !activeTeacherChatStudentId) return;
+
+            const chatCol = db.collection("exams").doc(activeTeacherChatExamId).collection("chat");
+            await chatCol.add({
+                text, studentId: activeTeacherChatStudentId, senderId: currentUser.uid, senderName: "Instructor", timestamp: firebase.firestore.FieldValue.serverTimestamp(), isAnnouncement: false,
+            });
+            input.value = '';
+        };
+
+        const sendAnnouncement = async () => {
+             const confirmed = await showConfirm("Send Announcement", "Broadcast this message to all students?");
+             if (!confirmed) return;
+
+            const input = document.getElementById('announcement-input');
+            const text = input.value.trim();
+            if (!text || !activeTeacherChatExamId) return;
+
+            const chatCol = db.collection("exams").doc(activeTeacherChatExamId).collection("chat");
+            await chatCol.add({
+                text, senderId: currentUser.uid, senderName: "Instructor", timestamp: firebase.firestore.FieldValue.serverTimestamp(), isAnnouncement: true
+            });
+            input.value = '';
+            showToast("Announcement sent.");
+        };
+       
+        // --- Event Listeners ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Auth
+            document.getElementById('login-button').addEventListener('click', handleLogin);
+            document.getElementById('signup-button').addEventListener('click', handleSignup);
+            document.getElementById('google-login-btn').addEventListener('click', handleGoogleLogin); // New Google Listener
+            document.getElementById('google-signup-btn').addEventListener('click', handleGoogleLogin); // New Google Listener
+            document.getElementById('show-signup').addEventListener('click', () => toggleAuthView('signup'));
+            document.getElementById('show-login').addEventListener('click', () => toggleAuthView('login'));
+            document.getElementById('logout-button').addEventListener('click', logout);
+           
+            // Dashboard
+            document.getElementById('join-exam-button').addEventListener('click', joinExam);
+            document.getElementById('check-results-button').addEventListener('click', checkStudentResults); // New Listener
+            document.getElementById('create-exam-button').addEventListener('click', () => showExamEditor());
+
+            // Exam List (Event Delegation)
+            document.getElementById('exam-list').addEventListener('click', (e) => {
+                const button = e.target.closest('button[data-action]');
+                if (!button) return;
+               
+                const action = button.dataset.action;
+                const examId = button.parentElement.dataset.examId;
+               
+                if (action === 'edit') editExam(examId);
+                else if (action === 'results') viewResults(examId);
+                else if (action === 'chat') openTeacherChat(examId);
+                else if (action === 'delete') deleteExam(examId);
+            });
+           
+            // Exam Editor
+            document.getElementById('add-question-buttons').addEventListener('click', (e) => {
+                if(e.target.tagName === 'BUTTON' && e.target.dataset.type){
+                    addQuestion(e.target.dataset.type);
+                    // Scroll to bottom
+                    const container = document.getElementById('questions-container');
+                    setTimeout(() => container.lastElementChild.scrollIntoView({behavior: 'smooth'}), 100);
+                }
+            });
+            document.getElementById('cancel-exam-button').addEventListener('click', () => showView('app-dashboard-view'));
+            document.getElementById('save-exam-button').addEventListener('click', saveExam);
+            document.getElementById('questions-container').addEventListener('change', (e) => {
+                if (e.target.classList.contains('manual-grade-check')) {
+                    const questionDiv = e.target.closest('[data-type]');
+                    const sections = questionDiv.querySelectorAll('.correct-answer-section');
+                    sections.forEach(section => {
+                        section.classList.toggle('hidden', e.target.checked);
+                    });
+                }
+            });
+
+            // Exam Taking
+            document.getElementById('submit-exam-button').addEventListener('click', submitExam);
+
+            // Results
+            document.getElementById('results-back-button').addEventListener('click', () => showView('app-dashboard-view'));
+            document.getElementById('teacher-results-back-button').addEventListener('click', () => showView('app-dashboard-view'));
+            document.getElementById('submission-list').addEventListener('click', (e) => {
+                if(e.target.classList.contains('grade-submission-btn')) {
+                    gradeStudentSubmission(e.target.dataset.submissionId);
+                }
+            });
+             document.getElementById('manual-grading-container').addEventListener('click', saveManualGrade);
+             document.getElementById('grading-back-button').addEventListener('click', () => viewResults(currentExamId));
+
+
+            // Chat
+            document.getElementById('chat-tab').addEventListener('click', openChat);
+            document.getElementById('chat-close-button').addEventListener('click', closeChat);
+            document.getElementById('send-chat-button').addEventListener('click', sendStudentMessage);
+            document.getElementById('chat-input').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') sendStudentMessage();
+            });
+           
+            // Teacher Chat
+            document.getElementById('teacher-chat-back-button').addEventListener('click', closeTeacherChat);
+            document.getElementById('teacher-send-reply-button').addEventListener('click', sendTeacherReply);
+            document.getElementById('teacher-chat-input').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') sendTeacherReply();
+            });
+            document.getElementById('send-announcement-button').addEventListener('click', sendAnnouncement);
+            document.getElementById('announcement-input').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') sendAnnouncement();
+            });
+
+            // Textarea auto-expand
+            document.addEventListener('input', (e) => {
+                if (e.target.tagName.toLowerCase() === 'textarea') {
+                    e.target.style.height = 'auto';
+                    e.target.style.height = (e.target.scrollHeight) + 'px';
+                }
+            }, false);
+            
+            // Modal Background click close
+            document.getElementById('custom-modal').addEventListener('click', (e) => {
+                if(e.target.id === 'custom-modal') {
+                     // Only close if it's not a strict modal logic, usually confirm/alert blocks UI. 
+                     // We keep it blocking for safety as per standard alert behavior.
+                     // Shake animation for feedback?
+                     const content = document.getElementById('modal-content');
+                     content.classList.add('scale-105');
+                     setTimeout(() => content.classList.remove('scale-105'), 150);
+                }
+            });
+        });
+
+    </script>
+</body>
+</html>
