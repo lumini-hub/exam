@@ -25,6 +25,7 @@
                         'fade-in': 'fadeIn 0.3s ease-out forwards',
                         'slide-up': 'slideUp 0.4s ease-out forwards',
                         'bounce-slight': 'bounceSlight 0.3s infinite alternate',
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
                     },
                     keyframes: {
                         fadeIn: {
@@ -98,6 +99,13 @@
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
+        
+        /* AI Gradient Text */
+        .text-gradient-ai {
+            background: linear-gradient(135deg, #4F46E5 0%, #ec4899 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
     </style>
 </head>
 <body class="text-slate-800 antialiased selection:bg-primary selection:text-white">
@@ -118,6 +126,56 @@
             <div class="flex justify-end gap-3 mt-8">
                 <button id="modal-cancel" class="px-5 py-2.5 rounded-xl text-slate-600 font-medium hover:bg-slate-100 transition-colors hidden">Cancel</button>
                 <button id="modal-confirm" class="px-5 py-2.5 rounded-xl bg-primary text-white font-medium hover:bg-indigo-700 shadow-lg shadow-indigo-500/30 transition-all transform hover:scale-[1.02] active:scale-95">Okay</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Generator Modal -->
+    <div id="ai-generator-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[80] hidden flex items-center justify-center transition-all duration-300 opacity-0">
+        <div class="bg-white rounded-3xl shadow-2xl p-0 max-w-lg w-full mx-4 transform scale-95 transition-all duration-300 overflow-hidden" id="ai-modal-content">
+            <div class="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full blur-2xl transform translate-x-10 -translate-y-10"></div>
+                <h3 class="text-2xl font-bold flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-300" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 9a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zm7-10a1 1 0 01.707.293l3.293 3.293a1 1 0 010 1.414l-3.293 3.293a1 1 0 01-1.414-1.414L14.586 5l-2.293-2.293A1 1 0 0112 2z" clip-rule="evenodd" /></svg>
+                    AI Question Maker
+                </h3>
+                <p class="text-indigo-100 text-sm mt-1">Describe what you want, and let AI do the rest.</p>
+            </div>
+            
+            <div class="p-8 space-y-6">
+                <div>
+                    <label class="block text-sm font-bold text-slate-700 mb-2">Topic or Concept</label>
+                    <input type="text" id="ai-topic-input" placeholder="e.g. Quantum Physics, French Revolution, basic arithmetic..." class="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 focus:outline-none transition-all">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-slate-700 mb-2">Question Type</label>
+                        <select id="ai-type-select" class="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 focus:outline-none transition-all">
+                            <option value="mcq">Multiple Choice</option>
+                            <option value="true-false">True / False</option>
+                            <option value="short">Short Answer</option>
+                            <option value="fill-blank">Fill in Blank</option>
+                            <option value="numeric">Numeric</option>
+                        </select>
+                    </div>
+                    <div>
+                         <label class="block text-sm font-bold text-slate-700 mb-2">Difficulty</label>
+                         <select id="ai-difficulty-select" class="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 focus:outline-none transition-all">
+                            <option value="easy">Easy</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="hard">Hard</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="pt-2">
+                    <button id="ai-generate-confirm" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold py-3.5 rounded-xl hover:shadow-lg hover:shadow-indigo-500/30 transition-all transform hover:scale-[1.01] active:scale-[0.98] flex items-center justify-center gap-2">
+                        <span>Generate Question</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M13 2a1 1 0 100 2h-2V2H9v2H7V2H5v2H3v2h2v2h2v-2h2v2h2v-2h2V4h-2V2zM7 8v2h2V8H7zm4 0v2h2V8h-2z" clip-rule="evenodd" /></svg>
+                    </button>
+                    <button id="ai-modal-cancel" class="w-full mt-3 text-slate-500 font-semibold hover:text-slate-800 transition py-2">Cancel</button>
+                </div>
             </div>
         </div>
     </div>
@@ -313,12 +371,25 @@
                 
                 <input type="text" id="exam-title" placeholder="Exam Title (e.g. Midterm Physics)" class="w-full text-3xl font-bold p-4 border-b-2 border-slate-100 focus:border-primary focus:outline-none bg-transparent mb-8 transition-colors placeholder-slate-300">
 
+                <!-- Questions Container -->
                 <div id="questions-container" class="space-y-8 mb-12"></div>
+                
+                <!-- AI Button Section -->
+                <div class="mb-6 flex justify-center">
+                    <button onclick="showAIGeneratorModal()" class="group relative inline-flex items-center justify-center p-0.5 mb-2 mr-2 overflow-hidden text-sm font-medium text-gray-900 rounded-2xl group bg-gradient-to-br from-purple-600 to-blue-500 hover:text-white dark:text-white focus:ring-4 focus:outline-none focus:ring-blue-300 transition-all hover:shadow-lg shadow-purple-500/20 transform hover:scale-[1.02]">
+                        <span class="relative px-8 py-3.5 transition-all ease-in duration-75 bg-white rounded-xl group-hover:bg-opacity-0">
+                            <span class="flex items-center gap-2 text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600 font-bold text-lg group-hover:text-white">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 9a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zm7-10a1 1 0 01.707.293l3.293 3.293a1 1 0 010 1.414l-3.293 3.293a1 1 0 01-1.414-1.414L14.586 5l-2.293-2.293A1 1 0 0112 2z" clip-rule="evenodd" /></svg>
+                                Ask AI to Generate Question
+                            </span>
+                        </span>
+                    </button>
+                </div>
             
                 <div class="bg-slate-50 p-6 rounded-2xl border border-dashed border-slate-300">
                     <h4 class="font-semibold text-slate-600 mb-4 flex items-center gap-2">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd" /></svg>
-                        Add Question Type:
+                        Manually Add Question Type:
                     </h4>
                     <div id="add-question-buttons" class="flex flex-wrap items-center gap-3">
                         <button data-type="mcq" class="bg-white border border-slate-200 text-slate-700 font-medium py-2 px-4 rounded-lg hover:border-blue-500 hover:text-blue-600 hover:shadow-sm transition-all text-sm">Multiple Choice</button>
@@ -630,12 +701,134 @@
         let activeTeacherChatStudentId = null;
         let allChatMessages = [];
         let lastMessageTimestamp = null;
+        
+        // --- GEMINI API HELPERS ---
+        const GEMINI_API_KEY = "AIzaSyDFC0NOx8RnrCgXG9HAu1_nPSaL7EGH98E"; // Using same key as existing code
+
+        const showAIGeneratorModal = () => {
+            const aiModal = document.getElementById('ai-generator-modal');
+            const aiContent = document.getElementById('ai-modal-content');
+            aiModal.classList.remove('hidden');
+            requestAnimationFrame(() => {
+                aiModal.classList.remove('opacity-0');
+                aiContent.classList.remove('scale-95');
+                aiContent.classList.add('scale-100');
+            });
+            document.getElementById('ai-topic-input').focus();
+        };
+
+        const closeAIGeneratorModal = () => {
+            const aiModal = document.getElementById('ai-generator-modal');
+            const aiContent = document.getElementById('ai-modal-content');
+            aiModal.classList.add('opacity-0');
+            aiContent.classList.remove('scale-100');
+            aiContent.classList.add('scale-95');
+            setTimeout(() => aiModal.classList.add('hidden'), 300);
+        };
+
+        const generateAIQuestion = async () => {
+            const topic = document.getElementById('ai-topic-input').value.trim();
+            const type = document.getElementById('ai-type-select').value;
+            const difficulty = document.getElementById('ai-difficulty-select').value;
+            const btn = document.getElementById('ai-generate-confirm');
+
+            if (!topic) {
+                showToast("Please enter a topic.", 'error');
+                return;
+            }
+
+            const originalBtnContent = btn.innerHTML;
+            btn.innerHTML = '<span class="loader w-5 h-5 border-2 border-white/50 border-t-white inline-block"></span> Generating...';
+            btn.disabled = true;
+
+            const prompt = `
+                Generate a single "${type}" exam question about "${topic}". Difficulty: ${difficulty}.
+                
+                You must output strictly VALID JSON matching this schema based on the type:
+                
+                If type is 'mcq':
+                {
+                    "text": "Question text here?",
+                    "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
+                    "correctAnswer": 0, // index of correct option (0-3)
+                    "points": 10
+                }
+
+                If type is 'true-false':
+                {
+                    "text": "Statement text here.",
+                    "correctAnswer": true, // or false
+                    "points": 10
+                }
+
+                If type is 'short' or 'long':
+                {
+                    "text": "Question prompt here?",
+                    "points": 10
+                }
+
+                If type is 'numeric':
+                {
+                    "text": "Math problem text here?",
+                    "correctAnswer": 42,
+                    "tolerance": 0,
+                    "points": 10
+                }
+
+                If type is 'fill-blank':
+                {
+                    "text": "The sky is [blank] and grass is [blank].", // Use [blank] for missing words
+                    "blanks": ["blue", "green"], // array of answers in order
+                    "points": 10
+                }
+
+                Only return the JSON object. Do not include markdown formatting or explanations.
+            `;
+
+            try {
+                const model = 'gemini-2.5-flash';
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { responseMimeType: "application/json" }
+                    })
+                });
+
+                if (!response.ok) throw new Error("API Error");
+
+                const data = await response.json();
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                if (text) {
+                    const questionData = JSON.parse(text);
+                    // Inject type manually to ensure it matches
+                    addQuestion(type, { ...questionData, manualGrading: false });
+                    closeAIGeneratorModal();
+                    showToast("Question generated successfully!", 'success');
+                    // Scroll to bottom
+                    const container = document.getElementById('questions-container');
+                    setTimeout(() => container.lastElementChild.scrollIntoView({behavior: 'smooth'}), 100);
+                } else {
+                    throw new Error("Empty response");
+                }
+            } catch (error) {
+                console.error("AI Gen Error:", error);
+                showToast("Failed to generate question. Try again.", 'error');
+            } finally {
+                btn.innerHTML = originalBtnContent;
+                btn.disabled = false;
+            }
+        };
 
 
         // --- UI Navigation ---
         const showView = (viewId) => {
             document.querySelectorAll('#app > div > div').forEach(div => {
-                if(div.id.includes('view') && div.id !== 'toast-container' && div.id !== 'custom-modal') {
+                if(div.id.includes('view') && div.id !== 'toast-container' && div.id !== 'custom-modal' && div.id !== 'ai-generator-modal') {
                      div.classList.add('view-hidden');
                 }
             });
@@ -1231,16 +1424,8 @@
         }
 
         async function evaluateWithAI(question, answer) {
-            // TODO: Replace with your valid Gemini API Key
-            const apiKey = "AIzaSyDFC0NOx8RnrCgXG9HAu1_nPSaL7EGH98E"; 
-            
-            if (!apiKey || apiKey === "YOUR_GEMINI_API_KEY") {
-                console.warn("Gemini API Key is missing. Please add it in the evaluateWithAI function.");
-                return { score: 0, feedback: "AI grading skipped (API Key missing)." };
-            }
-
             const model = 'gemini-2.5-flash';
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
             const prompt = `
                 You are an academic grader.
@@ -1938,6 +2123,10 @@
                     });
                 }
             });
+
+            // AI Listeners
+            document.getElementById('ai-modal-cancel').addEventListener('click', closeAIGeneratorModal);
+            document.getElementById('ai-generate-confirm').addEventListener('click', generateAIQuestion);
 
             // Exam Taking
             document.getElementById('submit-exam-button').addEventListener('click', submitExam);
