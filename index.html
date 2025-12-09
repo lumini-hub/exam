@@ -1231,25 +1231,56 @@
         }
 
         async function evaluateWithAI(question, answer) {
-            const pipedreamUrl = "https://eost4t92gmnlal8.m.pipedream.net";
-            const fullPrompt = `The following is a question from an exam and a student's answer to it. Question: "${question}". Student's Answer: "${answer}". Please act as an AI grader. Evaluate the student's answer based on the question. Provide a score from 0.0 (completely incorrect) to 1.0 (perfectly correct). Also, provide brief, constructive feedback. Your response MUST be ONLY a valid JSON object in the format: {"score": <number>, "feedback": "<string>"}. Do not include any other text, greetings, or explanations outside of the JSON object.`;
-           
+            // TODO: Replace with your valid Gemini API Key
+            const apiKey = "AIzaSyDFC0NOx8RnrCgXG9HAu1_nPSaL7EGH98E"; 
+            
+            if (!apiKey || apiKey === "YOUR_GEMINI_API_KEY") {
+                console.warn("Gemini API Key is missing. Please add it in the evaluateWithAI function.");
+                return { score: 0, feedback: "AI grading skipped (API Key missing)." };
+            }
+
+            const model = 'gemini-2.5-flash';
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+            const prompt = `
+                You are an academic grader.
+                Question: "${question}"
+                Student's Answer: "${answer}"
+                
+                Evaluate the answer.
+                1. Assign a score from 0.0 (incorrect) to 1.0 (perfect).
+                2. Provide brief, constructive feedback.
+                
+                Output valid JSON only: {"score": <number>, "feedback": "<string>"}
+            `;
+
             try {
-                const response = await fetch(pipedreamUrl, {
+                const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question: fullPrompt, answer: answer })
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{ text: prompt }]
+                        }],
+                        generationConfig: {
+                            responseMimeType: "application/json"
+                        }
+                    })
                 });
 
-                const responseText = await response.text();
-                if (!response.ok) throw new Error("API Error");
-               
-                const jsonMatch = responseText.match(/\{.*\}/s);
-                if (jsonMatch && jsonMatch[0]) {
-                    return JSON.parse(jsonMatch[0]);
-                } else {
-                    return { score: 0, feedback: "AI grading unavailable." };
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error?.message || response.statusText);
                 }
+
+                const data = await response.json();
+                const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                if (text) {
+                    return JSON.parse(text);
+                }
+                return { score: 0, feedback: "AI response empty." };
+
             } catch (error) {
                 console.error("AI Grading Error:", error);
                 return { score: 0, feedback: "AI grading failed." };
