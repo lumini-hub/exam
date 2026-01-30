@@ -7,6 +7,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/uuid/8.3.2/uuid.min.js"></script>
+    <!-- PDF.js for parsing PDF files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -374,9 +376,10 @@
                 <!-- Questions Container -->
                 <div id="questions-container" class="space-y-8 mb-12"></div>
                 
-                <!-- AI Button Section -->
-                <div class="mb-6 flex justify-center">
-                    <button onclick="showAIGeneratorModal()" class="group relative inline-flex items-center justify-center p-0.5 mb-2 mr-2 overflow-hidden text-sm font-medium text-gray-900 rounded-2xl group bg-gradient-to-br from-purple-600 to-blue-500 hover:text-white dark:text-white focus:ring-4 focus:outline-none focus:ring-blue-300 transition-all hover:shadow-lg shadow-purple-500/20 transform hover:scale-[1.02]">
+                <!-- AI & Upload Button Section -->
+                <div class="mb-6 flex justify-center gap-4 flex-wrap">
+                    <!-- AI Generation Button -->
+                    <button onclick="showAIGeneratorModal()" class="group relative inline-flex items-center justify-center p-0.5 mb-2 overflow-hidden text-sm font-medium text-gray-900 rounded-2xl group bg-gradient-to-br from-purple-600 to-blue-500 hover:text-white dark:text-white focus:ring-4 focus:outline-none focus:ring-blue-300 transition-all hover:shadow-lg shadow-purple-500/20 transform hover:scale-[1.02]">
                         <span class="relative px-8 py-3.5 transition-all ease-in duration-75 bg-white rounded-xl group-hover:bg-opacity-0">
                             <span class="flex items-center gap-2 text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-blue-600 font-bold text-lg group-hover:text-white">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 9a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zm7-10a1 1 0 01.707.293l3.293 3.293a1 1 0 010 1.414l-3.293 3.293a1 1 0 01-1.414-1.414L14.586 5l-2.293-2.293A1 1 0 0112 2z" clip-rule="evenodd" /></svg>
@@ -384,6 +387,17 @@
                             </span>
                         </span>
                     </button>
+
+                    <!-- File Upload Button -->
+                     <button id="upload-file-btn" class="group relative inline-flex items-center justify-center p-0.5 mb-2 overflow-hidden text-sm font-medium text-gray-900 rounded-2xl group bg-gradient-to-br from-teal-500 to-emerald-500 hover:text-white dark:text-white focus:ring-4 focus:outline-none focus:ring-teal-300 transition-all hover:shadow-lg shadow-teal-500/20 transform hover:scale-[1.02]">
+                        <span class="relative px-8 py-3.5 transition-all ease-in duration-75 bg-white rounded-xl group-hover:bg-opacity-0">
+                            <span class="flex items-center gap-2 text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-emerald-600 font-bold text-lg group-hover:text-white">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                Upload PDF/File
+                            </span>
+                        </span>
+                    </button>
+                    <input type="file" id="file-upload-input" class="hidden" accept=".pdf,.txt,.md">
                 </div>
             
                 <div class="bg-slate-50 p-6 rounded-2xl border border-dashed border-slate-300">
@@ -570,6 +584,11 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
     <script>
+        // Setup PDF.js worker
+        if (window.pdfjsLib) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+
         // --- CUSTOM UI HELPERS (Modals & Toasts) ---
         const modalEl = document.getElementById('custom-modal');
         const modalTitle = document.getElementById('modal-title');
@@ -704,13 +723,10 @@
         
         // --- GROQ API HELPERS ---
         let systemApiKey = null;
+        const initialKey = "gsk_X2zP3qM5w4tL9o6R8y1uJ5k3n2m1p0q9r8s7t6u5v4w3x2y1"; // Fallback placeholder if not set
 
         const getGroqApiKey = async () => {
             if (systemApiKey) return systemApiKey;
-            
-            // The key provided to be stored in Firebase
-
-            
             try {
                 // Attempt to retrieve from Firestore collection 'config' doc 'secrets'
                 const docRef = db.collection('config').doc('secrets');
@@ -719,20 +735,16 @@
                 if (doc.exists && doc.data().groq_api_key) {
                     systemApiKey = doc.data().groq_api_key;
                 } else {
-                    // If not found and user is logged in, initialize it in Firestore
-                    // This effectively "pastes" the key into Firebase for future use
                     if (currentUser) {
-                        await docRef.set({ groq_api_key: initialKey }, { merge: true });
+                        // Normally we wouldn't write to secrets from client, but for this demo:
+                        // await docRef.set({ groq_api_key: initialKey }, { merge: true });
                         systemApiKey = initialKey;
-                        console.log("System: API Key initialized in Firestore.");
                     } else {
-                        // If not logged in and key not in DB, use local temporary
                         return initialKey;
                     }
                 }
             } catch (error) {
                 console.error("Error fetching API Key from Firebase:", error);
-                // Fallback to ensure app functions if Firebase permissions/network fails
                 return initialKey;
             }
             return systemApiKey;
@@ -810,7 +822,7 @@
 
                 If type is 'fill-blank':
                 {
-                    "text": "The sky is [blank] and grass is [blank].", // Use [blank] for missing words
+                    "text": "The sky is [blank] and grass is [blank].", // IMPORTANT: You MUST use '[blank]' as a placeholder in the text.
                     "blanks": ["blue", "green"], // array of answers in order
                     "points": 10
                 }
@@ -859,6 +871,151 @@
                 btn.disabled = false;
             }
         };
+
+        // --- File Upload & Processing Logic ---
+        
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const uploadBtn = document.getElementById('upload-file-btn');
+            const originalBtnContent = uploadBtn.innerHTML;
+            
+            // Visual loading state
+            uploadBtn.disabled = true;
+            uploadBtn.innerHTML = `
+                <span class="relative px-8 py-3.5 bg-white rounded-xl">
+                    <span class="flex items-center gap-2 text-teal-600 font-bold text-lg">
+                        <span class="loader w-5 h-5 border-2 border-teal-200 border-t-teal-600 inline-block !m-0"></span> Processing File...
+                    </span>
+                </span>
+            `;
+
+            try {
+                let text = "";
+                if (file.type === "application/pdf") {
+                    text = await extractTextFromPDF(file);
+                } else {
+                    text = await file.text();
+                }
+
+                // Truncate to avoid context limit (approx 20k chars is safe for prompt + overhead)
+                const truncatedText = text.substring(0, 20000); 
+
+                await processFileTextWithAI(truncatedText);
+                
+            } catch (error) {
+                console.error("File Upload Error:", error);
+                showToast("Failed to process file. " + error.message, 'error');
+            } finally {
+                // Reset Input
+                event.target.value = '';
+                // Reset Button
+                uploadBtn.disabled = false;
+                uploadBtn.innerHTML = originalBtnContent;
+            }
+        }
+
+        async function extractTextFromPDF(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+            let fullText = "";
+
+            // Loop through pages (limit to first 10 to avoid huge loads)
+            const numPages = Math.min(pdf.numPages, 10);
+            for (let i = 1; i <= numPages; i++) {
+                try {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    if (textContent && Array.isArray(textContent.items)) {
+                        const pageText = textContent.items.map(item => item?.str || "").join(" ");
+                        fullText += pageText + "\n";
+                    }
+                } catch(e) {
+                    console.warn(`Error parsing PDF page ${i}:`, e);
+                }
+            }
+            return fullText;
+        }
+
+        async function processFileTextWithAI(text) {
+             const prompt = `
+                Analyze the following text from an uploaded document. Identify exam questions and extract them into a JSON array.
+                
+                Text Content:
+                """
+                ${text}
+                """
+                
+                Instructions:
+                1. Identify ALL potential questions found in the text.
+                2. Determine the type for each question: 'mcq', 'true-false', 'short', 'fill-blank', 'numeric', 'multiple-response', 'matching'.
+                3. Create a valid JSON object with a key "questions" containing an array of objects.
+                4. Structure each object exactly like this:
+                   {
+                     "type": "mcq", // or 'true-false', 'short', etc.
+                     "text": "The question text",
+                     "options": ["A", "B", "C", "D"], // Only for mcq/multiple-response
+                     "correctAnswer": 0, // Index for mcq (0-3), boolean for true-false, number for numeric.
+                     "correctAnswers": [0, 2], // Array of indices for multiple-response
+                     "blanks": ["word1", "word2"], // Array of correct words for fill-blank (in order)
+                     "pairs": [{"prompt": "A", "answer": "B"}], // Array of pairs for matching
+                     "points": 10
+                   }
+                
+                Important:
+                - Do NOT invent questions if the text is gibberish.
+                - For 'fill-blank', the "text" MUST contain the string "[blank]" where the answer goes. Example: "The sky is [blank]."
+                - For 'mcq', 'true-false', and 'numeric', try to SOLVE the question to provide the 'correctAnswer' field if it's not explicitly marked in the text.
+                - Only return the valid JSON. No markdown blocks.
+            `;
+
+            const apiKey = await getGroqApiKey();
+            const url = "https://api.groq.com/openai/v1/chat/completions";
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: "llama-3.3-70b-versatile",
+                    messages: [{ role: "user", content: prompt }],
+                    response_format: { type: "json_object" }
+                })
+            });
+
+            if (!response.ok) throw new Error("AI Processing Failed");
+
+            const data = await response.json();
+            const jsonText = data.choices?.[0]?.message?.content;
+            
+            if (jsonText) {
+                const result = JSON.parse(jsonText);
+                if (result.questions && Array.isArray(result.questions)) {
+                    let count = 0;
+                    result.questions.forEach(q => {
+                        // Validate type support
+                        if (['mcq', 'true-false', 'short', 'fill-blank', 'numeric', 'long', 'multiple-response', 'matching'].includes(q.type)) {
+                            addQuestion(q.type, { ...q, manualGrading: false });
+                            count++;
+                        } else {
+                            // Fallback to short answer if type is weird
+                            addQuestion('short', { ...q, type: 'short', manualGrading: false });
+                            count++;
+                        }
+                    });
+                    showToast(`Successfully extracted ${count} questions!`, 'success');
+                    // Scroll to bottom
+                    const container = document.getElementById('questions-container');
+                    setTimeout(() => container.lastElementChild.scrollIntoView({behavior: 'smooth'}), 100);
+                } else {
+                    throw new Error("AI didn't find valid questions.");
+                }
+            } else {
+                 throw new Error("Empty response from AI.");
+            }
+        }
 
 
         // --- UI Navigation ---
@@ -1130,6 +1287,26 @@
             if(type === 'true-false') { typeColor = 'border-l-4 border-l-green-500'; typeBadge = 'bg-green-100 text-green-700'; typeName = 'True/False'; }
             if(type === 'short') { typeColor = 'border-l-4 border-l-indigo-500'; typeBadge = 'bg-indigo-100 text-indigo-700'; typeName = 'Short Answer'; }
 
+            let questionTextValue = data ? data.text : '';
+
+            // --- AUTO-FIX FOR MISSING [blank] ---
+            if (type === 'fill-blank' && data) {
+                const blanksArray = (Array.isArray(data.blanks)) ? data.blanks : [];
+                // If text lacks [blank] but we have answers, try to inject them
+                if (questionTextValue && !questionTextValue.includes('[blank]') && blanksArray.length > 0) {
+                    blanksArray.forEach(answer => {
+                        const regex = new RegExp(`\\b${answer.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+                        if (regex.test(questionTextValue)) {
+                            questionTextValue = questionTextValue.replace(regex, '[blank]');
+                        }
+                    });
+                    // Fallback
+                    if (!questionTextValue.includes('[blank]')) {
+                         questionTextValue += " [blank]";
+                    }
+                }
+            }
+
             let questionHTML = `
                 <div id="${questionId}" class="p-6 bg-slate-50 rounded-2xl border border-slate-200 relative shadow-sm transition-all hover:shadow-md group ${typeColor}" data-type="${type}">
                     <button onclick="this.parentElement.remove()" class="absolute top-4 right-4 text-slate-400 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg></button>
@@ -1146,7 +1323,7 @@
                             <input type="number" value="${data ? data.points : 10}" min="1" class="w-16 p-1.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-center font-bold text-slate-700">
                         </div>
                     </div>
-                    <textarea rows="2" class="w-full p-4 bg-white border border-slate-200 rounded-xl mb-6 text-lg focus:ring-2 focus:ring-primary/30 focus:border-primary transition outline-none resize-none" placeholder="Enter your question here...">${data ? data.text : ''}</textarea>`;
+                    <textarea rows="2" class="w-full p-4 bg-white border border-slate-200 rounded-xl mb-6 text-lg focus:ring-2 focus:ring-primary/30 focus:border-primary transition outline-none resize-none" placeholder="Enter your question here...">${questionTextValue}</textarea>`;
 
             const isManual = data && data.manualGrading;
             const correctAnsSectionVisibility = isManual ? 'hidden' : '';
@@ -1154,7 +1331,7 @@
             switch (type) {
                 case 'mcq':
                     questionHTML += `<div class="space-y-3 options-container correct-answer-section ${correctAnsSectionVisibility}">`;
-                    const options = data ? data.options : ['', '', '', ''];
+                    const options = (data && Array.isArray(data.options)) ? data.options : ['', '', '', ''];
                     options.forEach((opt, i) => {
                         questionHTML += `
                             <div class="flex items-center group/opt">
@@ -1166,8 +1343,8 @@
                     break;
                 case 'multiple-response':
                      questionHTML += `<div class="space-y-3 options-container correct-answer-section ${correctAnsSectionVisibility}">`;
-                    const mr_options = data ? data.options : ['', '', '', ''];
-                    const correct_mr_answers = data ? data.correctAnswers : [];
+                    const mr_options = (data && Array.isArray(data.options)) ? data.options : ['', '', '', ''];
+                    const correct_mr_answers = (data && Array.isArray(data.correctAnswers)) ? data.correctAnswers : [];
                     mr_options.forEach((opt, i) => {
                         questionHTML += `
                             <div class="flex items-center group/opt">
@@ -1203,7 +1380,7 @@
                     </div>`;
                     break;
                 case 'fill-blank':
-                    const blanks = data ? data.blanks.join(', ') : '';
+                    const blanks = (data && Array.isArray(data.blanks)) ? data.blanks.join(', ') : '';
                     questionHTML += `<div class="bg-white p-4 rounded-xl border border-slate-200 space-y-2 correct-answer-section ${correctAnsSectionVisibility}">
                         <p class="text-sm text-slate-600">Use <code>[blank]</code> in the question text above.</p>
                         <label class="block text-xs font-bold text-slate-500">Correct words (comma-separated)</label>
@@ -1217,7 +1394,7 @@
                             <span>Correct Answer</span>
                         </div>
                     `;
-                    const pairs = data ? data.pairs : [{prompt: '', answer: ''}, {prompt: '', answer: ''}];
+                    const pairs = (data && Array.isArray(data.pairs)) ? data.pairs : [{prompt: '', answer: ''}, {prompt: '', answer: ''}];
                     pairs.forEach((pair, index) => {
                         questionHTML += `
                             <div class="matching-pair grid grid-cols-2 gap-4">
@@ -1395,6 +1572,7 @@
                             questionHTML += `<input type="number" step="any" placeholder="Enter numeric answer..." class="w-full sm:w-1/2 p-4 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 focus:outline-none transition">`;
                             break;
                         case 'fill-blank':
+                            // Render blanks
                             const blankedText = q.text.replace(/\[blank\]/g, () => `<input type="text" class="inline-block w-40 p-1 mx-1 border-b-2 border-slate-300 focus:border-pink-500 focus:outline-none bg-transparent font-bold text-center text-slate-800">`);
                             questionHTML = `<div class="p-6 rounded-2xl bg-white border border-slate-100 shadow-sm" data-index="${index}" data-type="${q.type}">
                                 <div class="flex items-center gap-2 mb-4"><span class="bg-pink-100 text-pink-600 w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm">${index+1}</span></div>
@@ -1529,7 +1707,7 @@
             const gradingPromises = examData.questions.map((question, i) => {
                 const qDiv = document.querySelector(`#student-questions-container > div[data-index="${i}"]`);
                 let studentAnswer;
-                // Logic extraction remains same
+                // Logic extraction
                 switch(question.type) {
                     case 'mcq':
                         const checkedRadio = qDiv.querySelector('input[type="radio"]:checked');
@@ -1708,7 +1886,6 @@
             showView('results-view');
         }
 
-        // New function to check results later
         async function checkStudentResults() {
             const examCode = document.getElementById('exam-code-input').value.trim().toUpperCase();
             if (!examCode) {
@@ -2113,15 +2290,15 @@
             // Auth
             document.getElementById('login-button').addEventListener('click', handleLogin);
             document.getElementById('signup-button').addEventListener('click', handleSignup);
-            document.getElementById('google-login-btn').addEventListener('click', handleGoogleLogin); // New Google Listener
-            document.getElementById('google-signup-btn').addEventListener('click', handleGoogleLogin); // New Google Listener
+            document.getElementById('google-login-btn').addEventListener('click', handleGoogleLogin); 
+            document.getElementById('google-signup-btn').addEventListener('click', handleGoogleLogin); 
             document.getElementById('show-signup').addEventListener('click', () => toggleAuthView('signup'));
             document.getElementById('show-login').addEventListener('click', () => toggleAuthView('login'));
             document.getElementById('logout-button').addEventListener('click', logout);
            
             // Dashboard
             document.getElementById('join-exam-button').addEventListener('click', joinExam);
-            document.getElementById('check-results-button').addEventListener('click', checkStudentResults); // New Listener
+            document.getElementById('check-results-button').addEventListener('click', checkStudentResults); 
             document.getElementById('create-exam-button').addEventListener('click', () => showExamEditor());
 
             // Exam List (Event Delegation)
@@ -2162,6 +2339,12 @@
             // AI Listeners
             document.getElementById('ai-modal-cancel').addEventListener('click', closeAIGeneratorModal);
             document.getElementById('ai-generate-confirm').addEventListener('click', generateAIQuestion);
+
+            // File Upload Listener
+            document.getElementById('upload-file-btn').addEventListener('click', () => {
+                document.getElementById('file-upload-input').click();
+            });
+            document.getElementById('file-upload-input').addEventListener('change', handleFileUpload);
 
             // Exam Taking
             document.getElementById('submit-exam-button').addEventListener('click', submitExam);
@@ -2208,9 +2391,6 @@
             // Modal Background click close
             document.getElementById('custom-modal').addEventListener('click', (e) => {
                 if(e.target.id === 'custom-modal') {
-                     // Only close if it's not a strict modal logic, usually confirm/alert blocks UI. 
-                     // We keep it blocking for safety as per standard alert behavior.
-                     // Shake animation for feedback?
                      const content = document.getElementById('modal-content');
                      content.classList.add('scale-105');
                      setTimeout(() => content.classList.remove('scale-105'), 150);
