@@ -193,8 +193,10 @@
 
         /* Sidebar */
         .editor-sidebar {
-            position: sticky;
-            top: 20px;
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            left: max(12px, calc((100vw - 1280px) / 2 - 80px));
             width: 72px;
             flex-shrink: 0;
             display: flex;
@@ -205,7 +207,7 @@
             background: var(--bg-secondary);
             backdrop-filter: blur(20px);
             border: 1px solid var(--border-color);
-            z-index: 10;
+            z-index: 30;
             max-height: calc(100vh - 40px);
             overflow-y: auto;
             scrollbar-width: none;
@@ -406,10 +408,13 @@
         .sortable-ghost { opacity: 0.2; }
 
         @media (max-width: 768px) {
-            .editor-sidebar { position: relative; top: 0; width: 100%; flex-direction: row; overflow-x: auto; max-height: none; border-radius: 14px; padding: 6px; }
+            .editor-sidebar { position: relative; top: auto; left: auto; transform: none; width: 100%; flex-direction: row; overflow-x: auto; max-height: none; border-radius: 14px; padding: 6px; }
             .sidebar-btn { padding: 8px 12px; flex-direction: row; gap: 6px; }
             .sidebar-btn .sb-icon { font-size: 16px; }
             .student-math-toolbar { position: relative; left: 0; top: 0; transform: none; width: 100%; flex-direction: row; flex-wrap: wrap; justify-content: center; border-radius: 14px; }
+        }
+        @media (min-width: 769px) {
+            .editor-main-with-sidebar { margin-left: 88px; }
         }
 
         .fullscreen-bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #6366f1, #ec4899, #6366f1); background-size: 200% 100%; animation: shimmer 2s linear infinite; z-index: 100; pointer-events: none; }
@@ -898,7 +903,7 @@
                     </div>
 
                     <!-- Main Editor -->
-                    <div class="glass-panel p-5 sm:p-6 rounded-2xl flex-1 min-w-0">
+                    <div class="glass-panel p-5 sm:p-6 rounded-2xl flex-1 min-w-0 editor-main-with-sidebar">
                         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 pb-4 gap-3" style="border-bottom:1px solid var(--border-color)">
                             <h2 class="text-2xl font-bold" style="color:var(--text-heading)" id="editor-heading">Create New Exam</h2>
                             <div class="flex items-center gap-3">
@@ -1908,7 +1913,7 @@
                     case 'short':
                         qHTML += `<textarea rows="2" placeholder="Your answer..." class="w-full p-3 glass-input rounded-xl focus:outline-none resize-none text-sm"></textarea>`; break;
                     case 'long':
-                        qHTML += `<textarea rows="4" placeholder="Detailed answer..." class="w-full p-3 glass-input rounded-xl focus:outline-none resize-none text-sm"></textarea>`; break;
+                        qHTML += `<textarea rows="8" placeholder="Write your detailed answer here. Formatting (paragraphs, indentation, line breaks) will be preserved..." class="w-full p-3 glass-input rounded-xl focus:outline-none resize-y text-sm" style="white-space:pre-wrap;line-height:1.8;min-height:160px"></textarea>`; break;
                 }
                 qHTML += '</div></div>';
                 questionsContainer.innerHTML += qHTML;
@@ -1978,7 +1983,7 @@
         }
 
         async function evaluateWithAI(question, answer) {
-            const prompt = `You are an academic grader. Question: "${question}" Student's Answer: "${answer}" Evaluate: 1. Score 0.0-1.0. 2. Brief feedback. Output JSON only: {"score": <number>, "feedback": "<string>"}`;
+            const prompt = `You are an academic grader. Question: "${question}" Student's Answer: """${answer}""" IMPORTANT: The student's answer preserves its original formatting (paragraphs, line breaks, indentation). Judge the content and structure fairly — do NOT penalize for formatting artifacts. If it's a letter, report, or essay, evaluate based on content quality, structure, and relevance. Evaluate: 1. Score 0.0-1.0. 2. Brief feedback. Output JSON only: {"score": <number>, "feedback": "<string>"}`;
             try {
                 const apiKey = await getGroqApiKey(); if (!apiKey || apiKey === initialKey) throw new Error("Missing Key");
                 const response = await fetch("https://api.groq.com/openai/v1/chat/completions", { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`}, body: JSON.stringify({ model:"llama-3.3-70b-versatile", messages:[{role:"user",content:prompt}], response_format:{type:"json_object"} }) });
@@ -2044,12 +2049,12 @@
                     let isCorrect = false; let incorrectFeedback = 'Incorrect';
                     switch (question.type) {
                         case 'mcq': isCorrect = studentAnswer === question.correctAnswer; if (!isCorrect && question.options?.[question.correctAnswer]) incorrectFeedback = `Answer: ${question.options[question.correctAnswer]}`; break;
-                        case 'true-false': isCorrect = studentAnswer === question.correctAnswer; break;
-                        case 'multiple-response': if (studentAnswer && question.correctAnswers) { const cs = new Set(question.correctAnswers); const ss = new Set(studentAnswer); isCorrect = cs.size === ss.size && [...cs].every(x=>ss.has(x)); } break;
-                        case 'numeric': if (studentAnswer !== null && !isNaN(studentAnswer)) isCorrect = Math.abs(studentAnswer - question.correctAnswer) <= (question.tolerance||0); break;
-                        case 'fill-blank': if (studentAnswer?.length === question.blanks?.length) isCorrect = studentAnswer.every((a,j)=>a.trim().toLowerCase()===question.blanks[j]); break;
-                        case 'matching': if (studentAnswer?.length === question.pairs?.length) isCorrect = studentAnswer.every((a,j)=>a===question.pairs[j].answer); break;
-                        case 'ordering': if (studentAnswer?.length === question.items?.length) isCorrect = studentAnswer.every((a,j)=>a===question.items[j]); break;
+                        case 'true-false': isCorrect = studentAnswer === question.correctAnswer; if (!isCorrect) incorrectFeedback = `Answer: ${question.correctAnswer ? 'True' : 'False'}`; break;
+                        case 'multiple-response': if (studentAnswer && question.correctAnswers) { const cs = new Set(question.correctAnswers); const ss = new Set(studentAnswer); isCorrect = cs.size === ss.size && [...cs].every(x=>ss.has(x)); } if (!isCorrect && question.correctAnswers && question.options) incorrectFeedback = `Answer: ${question.correctAnswers.map(idx => question.options[idx]).join(', ')}`; break;
+                        case 'numeric': if (studentAnswer !== null && !isNaN(studentAnswer)) isCorrect = Math.abs(studentAnswer - question.correctAnswer) <= (question.tolerance||0); if (!isCorrect) incorrectFeedback = `Answer: ${question.correctAnswer}`; break;
+                        case 'fill-blank': if (studentAnswer?.length === question.blanks?.length) isCorrect = studentAnswer.every((a,j)=>a.trim().toLowerCase()===question.blanks[j]); if (!isCorrect && question.blanks?.length) incorrectFeedback = `Answer: ${question.blanks.join(', ')}`; break;
+                        case 'matching': if (studentAnswer?.length === question.pairs?.length) isCorrect = studentAnswer.every((a,j)=>a===question.pairs[j].answer); if (!isCorrect && question.pairs) incorrectFeedback = `Answer: ${question.pairs.map(p => p.prompt + ' → ' + p.answer).join(', ')}`; break;
+                        case 'ordering': if (studentAnswer?.length === question.items?.length) isCorrect = studentAnswer.every((a,j)=>a===question.items[j]); if (!isCorrect && question.items) incorrectFeedback = `Answer: ${question.items.join(' → ')}`; break;
                     }
                     answerData.score = isCorrect ? question.points : 0;
                     answerData.feedback = isCorrect ? 'Correct' : incorrectFeedback;
@@ -2087,6 +2092,7 @@
                 total += result.maxPoints;
                 if (result.score !== null) earned += result.score; else hasPending = true;
                 let answerDisplay = result.displayAnswer || ((result.studentAnswer !== null && result.studentAnswer !== undefined) ? (Array.isArray(result.studentAnswer) ? result.studentAnswer.join(', ') : String(result.studentAnswer)) : "No answer");
+                answerDisplay = answerDisplay.replace(/\n/g, '<br>');
                 const scoreText = result.score !== null ? `${result.score.toFixed(1)} / ${result.maxPoints}` : 'Pending';
                 const borderColor = result.score === null ? 'border-yellow-500/20' : (result.score > 0 ? 'border-green-500/20' : 'border-red-500/20');
                 const bgColor = result.score === null ? 'bg-yellow-500/5' : (result.score > 0 ? 'bg-green-500/5' : 'bg-red-500/5');
@@ -2094,7 +2100,7 @@
                 container.innerHTML += `<div class="p-4 glass-card rounded-xl animate-slide-up" style="animation-delay:${i*0.05}s">
                     <div class="flex gap-3"><span class="font-bold text-sm" style="color:var(--text-muted)">${i+1}.</span>
                         <div class="flex-1"><p class="font-medium text-sm mb-1.5 math-render-target" style="color:var(--text-heading)">${result.questionText}</p>
-                            <div class="glass-input p-2.5 rounded-lg mb-3 text-xs math-render-target" style="color:var(--text-secondary)"><span class="text-[10px] font-bold uppercase tracking-wider block mb-0.5" style="color:var(--text-muted)">Your Answer</span>${answerDisplay}</div>
+                            <div class="glass-input p-2.5 rounded-lg mb-3 text-xs math-render-target" style="color:var(--text-secondary);white-space:pre-wrap;word-wrap:break-word"><span class="text-[10px] font-bold uppercase tracking-wider block mb-0.5" style="color:var(--text-muted)">Your Answer</span>${answerDisplay}</div>
                             <div class="p-3 rounded-xl ${bgColor} flex justify-between items-center border ${borderColor}"><div><p class="font-bold text-sm ${textColor}">Score: ${scoreText}</p><p class="text-xs opacity-80 ${textColor} math-render-target">${result.feedback}</p></div>
                                 ${result.score > 0 ? '<svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>' : (result.score === 0 ? '<svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>' : '')}</div></div></div></div>`;
             });
