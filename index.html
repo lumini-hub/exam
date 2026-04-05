@@ -318,6 +318,32 @@
             background: rgba(16,185,129,0.08) !important;
         }
 
+        /* Line-drawing matching */
+        .match-node {
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            user-select: none;
+            border: 2px solid var(--border-color);
+            background: var(--bg-input);
+            color: var(--text-primary);
+        }
+        .match-node:hover { border-color: rgba(99,102,241,0.5); transform: scale(1.03); }
+        .match-node.selected { border-color: #6366f1; background: rgba(99,102,241,0.12); box-shadow: 0 0 12px rgba(99,102,241,0.25); }
+        .match-node.connected { border-color: rgba(16,185,129,0.5); background: rgba(16,185,129,0.08); }
+        .match-svg-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+        .match-line { stroke: #6366f1; stroke-width: 2.5; stroke-linecap: round; fill: none; transition: stroke 0.2s; }
+        .match-line:hover { stroke: #ef4444; stroke-width: 3.5; cursor: pointer; pointer-events: stroke; }
+
+        /* Question image */
+        .q-image-preview { max-width: 100%; max-height: 200px; border-radius: 10px; object-fit: contain; margin: 8px 0; border: 1px solid var(--border-color); }
+        .q-image-upload-btn { cursor: pointer; transition: all 0.2s; }
+        .q-image-upload-btn:hover { opacity: 0.8; transform: scale(1.05); }
+
         /* Lobby */
         .lobby-container {
             min-height: 70vh;
@@ -524,6 +550,7 @@
                             <option value="fill-blank">Fill in Blank</option>
                             <option value="numeric">Numeric</option>
                             <option value="ordering">Ordering</option>
+                            <option value="matching">Matching</option>
                             <option value="code">Code</option>
                         </select>
                     </div>
@@ -1287,6 +1314,7 @@
         const showAIGeneratorModal = async () => { const key = await getGroqApiKey(); if(!key || key === initialKey) { await showAlert("API Key Required", "Configure your Groq API Key in Settings to use AI features."); openSettingsModal(); return; } const aiModal = document.getElementById('ai-generator-modal'); const aiContent = document.getElementById('ai-modal-content'); aiModal.classList.remove('hidden'); requestAnimationFrame(() => { aiModal.classList.remove('opacity-0'); aiContent.classList.remove('scale-95'); aiContent.classList.add('scale-100'); }); document.getElementById('ai-topic-input').focus(); };
         const closeAIGeneratorModal = () => { const aiModal = document.getElementById('ai-generator-modal'); const aiContent = document.getElementById('ai-modal-content'); aiModal.classList.add('opacity-0'); aiContent.classList.remove('scale-100'); aiContent.classList.add('scale-95'); setTimeout(() => aiModal.classList.add('hidden'), 300); };
 
+        const _aiGeneratedCache = new Set();
         const generateAIQuestion = async () => {
             const topic = document.getElementById('ai-topic-input').value.trim();
             const type = document.getElementById('ai-type-select').value;
@@ -1294,22 +1322,53 @@
             const btn = document.getElementById('ai-generate-confirm');
             if (!topic) { showToast("Please enter a topic.", 'error'); return; }
             const origBtn = btn.innerHTML; btn.innerHTML = '<span class="loader w-5 h-5 border-2 border-white/50 border-t-white inline-block"></span> Generating...'; btn.disabled = true;
-            const prompt = `Generate a single "${type}" exam question about "${topic}". Difficulty: ${difficulty}.
-                Output strictly valid JSON matching the schema based on type:
-                If 'mcq': { "text": "...", "options": ["A","B","C","D"], "correctAnswer": 0, "points": 10 }
-                If 'true-false': { "text": "...", "correctAnswer": true, "points": 10 }
-                If 'short' or 'long': { "text": "...", "points": 10 }
-                If 'numeric': { "text": "... Use $...$ for math", "correctAnswer": 42, "tolerance": 0, "points": 10 }
-                If 'fill-blank': { "text": "The [blank] is blue.", "blanks": ["sky"], "points": 10 }
-                If 'ordering': { "text": "...", "items": ["first","second","third","fourth"], "points": 10 }
-                If 'code': { "text": "...", "language": "python", "points": 10 }
-                Only return the JSON object.`;
+
+            const existingQuestions = [];
+            document.querySelectorAll('#questions-container textarea').forEach(ta => { if(ta.value.trim()) existingQuestions.push(ta.value.trim().substring(0,120)); });
+            const avoidList = [..._aiGeneratedCache, ...existingQuestions].slice(-20);
+            const avoidSection = avoidList.length > 0 ? `\n\nCRITICAL — DO NOT repeat or rephrase any of these existing questions:\n${avoidList.map((q,i)=>`${i+1}. ${q}`).join('\n')}\nYour question MUST be substantially different in both wording and the specific concept tested.` : '';
+
+            const uniqueSeed = `Seed: ${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+
+            const prompt = `${uniqueSeed}
+You are an expert exam question writer with deep subject knowledge. Create ONE unique, high-quality "${type}" exam question about "${topic}".
+Difficulty: ${difficulty}.
+
+STRICT RULES:
+1. The question must be ORIGINAL and UNIQUE — never generic or formulaic.
+2. Focus on a SPECIFIC subtopic, fact, mechanism, or application within "${topic}" — do NOT ask broad overview questions.
+3. Pick a random angle: a real-world application, a common misconception, a specific detail, an edge case, a comparison, or a "why" question.
+4. For MCQ: All 4 options must be plausible and closely related. The correct answer MUST actually be correct — double-check your facts. Distractors should represent common student mistakes or misconceptions, NOT obviously wrong choices.
+5. For true-false: Use a nuanced, specific claim — NOT a textbook definition. The statement must be definitively true or false with no ambiguity. VERIFY your answer is correct.
+6. For short/long answer: Ask about specific mechanisms, comparisons, or applications — NOT "explain X" or "define Y".
+7. For fill-blank: The blank must replace a KEY term. Sentence must give enough context. VERIFY the answer fits perfectly.
+8. For numeric: Give a well-defined problem. SHOW YOUR WORK mentally and verify the numerical answer is correct before responding.
+9. For ordering: Items must have ONE clear correct sequence. Verify the order is actually correct.
+10. For code: Test practical problem-solving, not syntax trivia.
+11. VERIFY YOUR ANSWER IS CORRECT. This is the most important rule. Wrong answers are unacceptable.
+
+Difficulty guide:
+- easy: Direct recall or basic comprehension. Straightforward.
+- medium: Requires application of concepts, connecting ideas, or analysis.
+- hard: Requires synthesis, evaluation, multi-step reasoning, or handling edge cases/exceptions.
+${avoidSection}
+
+Output strictly valid JSON matching the schema based on type:
+If 'mcq': { "text": "...", "options": ["A","B","C","D"], "correctAnswer": 0, "points": 10 }
+If 'true-false': { "text": "...", "correctAnswer": true, "points": 10 }
+If 'short' or 'long': { "text": "...", "points": 10 }
+If 'numeric': { "text": "... Use $...$ for math", "correctAnswer": 42, "tolerance": 0, "points": 10 }
+If 'fill-blank': { "text": "The [blank] is blue.", "blanks": ["sky"], "points": 10 }
+If 'ordering': { "text": "...", "items": ["first","second","third","fourth"], "points": 10 }
+If 'matching': { "text": "Match the following:", "pairs": [{"prompt":"Term A","answer":"Definition A"},{"prompt":"Term B","answer":"Definition B"},{"prompt":"Term C","answer":"Definition C"},{"prompt":"Term D","answer":"Definition D"}], "points": 10 }
+If 'code': { "text": "...", "language": "python", "points": 10 }
+Only return the JSON object, no other text.`;
             try {
                 const apiKey = await getGroqApiKey(); if(!apiKey || apiKey === initialKey) throw new Error("Missing API Key");
-                const response = await fetch("https://api.groq.com/openai/v1/chat/completions", { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages: [{ role: "user", content: prompt }], response_format: { type: "json_object" } }) });
+                const response = await fetch("https://api.groq.com/openai/v1/chat/completions", { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages: [{ role: "system", content: "You are a precise exam question generator. Every question you create must be factually accurate, unique, and have a verified correct answer. Never repeat questions. Always double-check that your marked answer is actually correct." }, { role: "user", content: prompt }], response_format: { type: "json_object" }, temperature: 1.0, top_p: 0.95 }) });
                 if (!response.ok) throw new Error("API Error");
                 const data = await response.json(); const text = data.choices?.[0]?.message?.content;
-                if (text) { const qd = JSON.parse(text); addQuestion(type, { ...qd, manualGrading: false }); closeAIGeneratorModal(); showToast("Question generated!"); const c = document.getElementById('questions-container'); setTimeout(() => c.lastElementChild?.scrollIntoView({behavior:'smooth'}), 100); }
+                if (text) { const qd = JSON.parse(text); _aiGeneratedCache.add(qd.text?.substring(0,120) || ''); addQuestion(type, { ...qd, manualGrading: false }); closeAIGeneratorModal(); showToast("Question generated!"); const c = document.getElementById('questions-container'); setTimeout(() => c.lastElementChild?.scrollIntoView({behavior:'smooth'}), 100); }
                 else throw new Error("Empty response");
             } catch (error) { showToast(error.message === "Missing API Key" ? "Configure API Key in settings." : "Failed to generate.", 'error'); }
             finally { btn.innerHTML = origBtn; btn.disabled = false; }
@@ -1342,16 +1401,134 @@
             } catch (error) { showToast("Failed: " + error.message, 'error'); }
             finally { event.target.value = ''; }
         }
-        async function extractTextFromPDF(file) { const ab = await file.arrayBuffer(); const pdf = await pdfjsLib.getDocument(ab).promise; let t = ""; for (let i=1;i<=Math.min(pdf.numPages,10);i++) { try { const pg = await pdf.getPage(i); const tc = await pg.getTextContent(); if(tc&&Array.isArray(tc.items)) t+=tc.items.map(item=>item?.str||"").join(" ")+"\n"; } catch(e){} } return t; }
+        async function extractTextFromPDF(file) {
+            const ab = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument(ab).promise;
+            let t = "";
+            for (let i = 1; i <= Math.min(pdf.numPages, 30); i++) {
+                try {
+                    const pg = await pdf.getPage(i);
+                    const tc = await pg.getTextContent();
+                    if (tc && Array.isArray(tc.items)) {
+                        const lines = [];
+                        let lastY = null;
+                        tc.items.forEach(item => {
+                            if (!item.str) return;
+                            const y = Math.round(item.transform[5]);
+                            if (lastY !== null && Math.abs(y - lastY) > 5) lines.push('\n');
+                            else if (lines.length > 0 && !lines[lines.length-1].endsWith(' ')) lines.push(' ');
+                            lines.push(item.str);
+                            lastY = y;
+                        });
+                        t += lines.join('') + '\n\n';
+                    }
+                } catch(e) {}
+            }
+            return t;
+        }
+
         async function processFileTextWithAI(text) {
-            const prompt = `Analyze text. Extract exam questions into JSON array. Text: """${text}"""
-                Structure each: { "type":"mcq/true-false/short/fill-blank/numeric/multiple-response/matching/ordering/code", "text":"...", "options":[...], "correctAnswer":0, "correctAnswers":[0,2], "blanks":[...], "pairs":[...], "items":[...], "language":"python", "points":10 }
-                For fill-blank, text must contain "[blank]". Only return valid JSON with "questions" array.`;
             const apiKey = await getGroqApiKey();
-            const response = await fetch("https://api.groq.com/openai/v1/chat/completions", { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`}, body: JSON.stringify({ model:"llama-3.3-70b-versatile", messages:[{role:"user",content:prompt}], response_format:{type:"json_object"} }) });
+
+            // Step 1: Classify the document type
+            const classifyPrompt = `Analyze this document text and classify it. Is this:
+A) A QUESTION PAPER / PAST EXAM / QUIZ — contains existing questions that should be extracted as-is
+B) STUDY NOTES / TEXTBOOK / LECTURE NOTES — contains educational content from which questions should be generated
+
+Respond with ONLY valid JSON: {"type": "questions" or "notes", "confidence": 0.0-1.0, "details": "brief explanation"}
+
+Text (first 3000 chars):
+"""${text.substring(0, 3000)}"""`;
+
+            const classifyResp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages: [{ role: "user", content: classifyPrompt }], response_format: { type: "json_object" }, temperature: 0.1 })
+            });
+            if (!classifyResp.ok) throw new Error("AI Classification Failed");
+            const classifyData = await classifyResp.json();
+            const classification = JSON.parse(classifyData.choices?.[0]?.message?.content || '{"type":"notes"}');
+            const isQuestionPaper = classification.type === 'questions';
+
+            showToast(isQuestionPaper ? "Detected question paper — extracting questions..." : "Detected study notes — generating questions...", 'info');
+
+            let prompt;
+            if (isQuestionPaper) {
+                prompt = `You are an expert at extracting exam questions from question papers, past papers, and quizzes.
+
+TASK: Extract ALL questions from this document EXACTLY as they appear. Preserve the original wording.
+
+CRITICAL — CORRECT ANSWERS:
+- You MUST identify and include the correct answer for EVERY question. This is mandatory.
+- For MCQ: "correctAnswer" must be the 0-based index of the correct option. If an answer key exists in the document, USE IT.
+- For true-false: "correctAnswer" must be true or false.
+- For numeric: "correctAnswer" must be the number.
+- For fill-blank: "blanks" must contain the correct answer words.
+- For matching: "pairs" must have {"prompt":"...","answer":"..."} with correct pairings.
+- If the document doesn't provide answers, determine them yourself and VERIFY correctness.
+
+RULES:
+1. Extract every question you find — do NOT skip any.
+2. Keep the original question text as closely as possible.
+3. Identify the correct question type for each (mcq, true-false, short, long, fill-blank, numeric, multiple-response, matching, ordering, code).
+4. If a question has sub-parts (a, b, c...), treat each sub-part as a separate question.
+5. For fill-blank: replace the blank/underline with [blank] in the text and put the answer in "blanks" array.
+6. Assign appropriate point values based on the document (or default to 10).
+7. VERIFY all correct answers are actually correct.
+
+Document text:
+"""${text}"""
+
+Output strictly valid JSON:
+{ "questions": [ { "type": "mcq/true-false/short/long/fill-blank/numeric/multiple-response/matching/ordering/code", "text": "...", "options": ["A","B","C","D"], "correctAnswer": 0, "correctAnswers": [0,2], "blanks": ["answer"], "pairs": [{"prompt":"...","answer":"..."}], "items": ["first","second"], "language": "python", "points": 10 } ] }
+Include only the fields relevant to each question type. For fill-blank, text MUST contain "[blank]".`;
+            } else {
+                prompt = `You are an expert exam question writer. Generate high-quality exam questions based on these study notes/content.
+
+TASK: Create diverse, well-crafted questions that thoroughly test understanding of the material.
+
+RULES:
+1. Generate 8-15 questions covering ALL major topics and key concepts in the notes.
+2. Use a MIX of question types: mcq, true-false, short, fill-blank, numeric (if applicable), ordering (if sequences exist), matching (if related terms/concepts exist).
+3. Vary difficulty: ~30% easy (recall), ~50% medium (application/analysis), ~20% hard (synthesis/evaluation).
+4. MCQ: All 4 options must be plausible. Distractors should be common misconceptions. MUST include "correctAnswer" (0-based index).
+5. True-false: Use specific, nuanced claims — not obvious definitions. MUST include "correctAnswer" (true/false).
+6. Short answer: Ask about mechanisms, comparisons, applications, or "why" — not just definitions.
+7. Fill-blank: Replace a KEY term with [blank]. Provide enough context to infer the answer. MUST include "blanks" array.
+8. Matching: Use {"prompt":"term","answer":"definition"} pairs. MUST have at least 4 pairs.
+9. Questions should test understanding, not just memorization where possible.
+10. EVERY answer must be CORRECT and VERIFIED. Double-check all facts against the provided notes.
+11. Do NOT invent facts not present in the notes.
+
+Study notes:
+"""${text}"""
+
+Output strictly valid JSON:
+{ "questions": [ { "type": "mcq/true-false/short/long/fill-blank/numeric/ordering/matching", "text": "...", "options": ["A","B","C","D"], "correctAnswer": 0, "blanks": ["answer"], "items": ["first","second"], "pairs": [{"prompt":"...","answer":"..."}], "points": 10 } ] }
+Include only the fields relevant to each question type. For fill-blank, text MUST contain "[blank]".`;
+            }
+
+            const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+                body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages: [
+                    { role: "system", content: "You are a precise exam question extractor and generator. Every answer you provide must be factually correct. Always verify your answers." },
+                    { role: "user", content: prompt }
+                ], response_format: { type: "json_object" }, temperature: isQuestionPaper ? 0.1 : 0.7 })
+            });
             if (!response.ok) throw new Error("AI Processing Failed");
-            const data = await response.json(); const jsonText = data.choices?.[0]?.message?.content;
-            if (jsonText) { const result = JSON.parse(jsonText); if (result.questions && Array.isArray(result.questions)) { let count = 0; result.questions.forEach(q => { const validTypes = ['mcq','true-false','short','fill-blank','numeric','long','multiple-response','matching','ordering','code']; if (validTypes.includes(q.type)) { addQuestion(q.type,{...q,manualGrading:false}); count++; } else { addQuestion('short',{...q,type:'short',manualGrading:false}); count++; } }); showToast(`Extracted ${count} questions!`); } else throw new Error("No valid questions."); } else throw new Error("Empty AI response.");
+            const data = await response.json();
+            const jsonText = data.choices?.[0]?.message?.content;
+            if (jsonText) {
+                const result = JSON.parse(jsonText);
+                if (result.questions && Array.isArray(result.questions)) {
+                    let count = 0;
+                    result.questions.forEach(q => {
+                        const validTypes = ['mcq','true-false','short','fill-blank','numeric','long','multiple-response','matching','ordering','code'];
+                        if (validTypes.includes(q.type)) { addQuestion(q.type, {...q, manualGrading: false}); count++; }
+                        else { addQuestion('short', {...q, type:'short', manualGrading: false}); count++; }
+                    });
+                    showToast(`${isQuestionPaper ? 'Extracted' : 'Generated'} ${count} questions!`);
+                } else throw new Error("No valid questions.");
+            } else throw new Error("Empty AI response.");
         }
 
         // ---- UI NAVIGATION ----
@@ -1503,6 +1680,21 @@
             html += `<textarea id="${taId}" rows="2" class="w-full p-3 mb-2 text-sm resize-none" placeholder="Enter your question here... ${type === 'numeric' ? '(Use $...$ for math)' : type === 'code' ? '(Describe the coding problem)' : ''}" oninput="if(document.getElementById('${previewId}'))renderMathPreview(this,document.getElementById('${previewId}'))">${questionTextValue}</textarea>`;
             if (type === 'numeric') html += `<div id="${previewId}" class="math-preview mb-3"></div>`;
 
+            // Image upload
+            const imgId = `img-${questionId}`;
+            const existingImage = data && data.image ? data.image : '';
+            html += `<div class="mb-3">
+                <div class="flex items-center gap-2 mb-1">
+                    <label for="imgfile-${questionId}" class="q-image-upload-btn text-[10px] font-bold uppercase px-2.5 py-1 rounded-lg flex items-center gap-1" style="background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-muted);cursor:pointer">
+                        🖼️ Add Image
+                    </label>
+                    <input type="file" id="imgfile-${questionId}" class="hidden" accept="image/*" onchange="handleQuestionImage(this,'${imgId}')">
+                    <button type="button" class="text-[10px] font-bold px-2 py-1 rounded-lg hover:bg-red-500/10 transition ${existingImage ? '' : 'hidden'}" style="color:var(--text-muted)" onclick="removeQuestionImage('${imgId}',this)">✕ Remove</button>
+                </div>
+                <img id="${imgId}" src="${existingImage}" class="q-image-preview ${existingImage ? '' : 'hidden'}">
+                <input type="hidden" class="q-image-data" value="${existingImage}">
+            </div>`;
+
             switch (type) {
                 case 'mcq':
                     html += `<div class="flex justify-end mb-1.5 correct-answer-section ${correctHide}"><button type="button" onclick="autoSolveMCQ('${questionId}')" class="text-[10px] bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-2.5 py-1 rounded-lg hover:shadow-md transition flex items-center gap-1 font-bold">✓ AI Pick</button></div>`;
@@ -1591,13 +1783,14 @@
             document.querySelectorAll('#questions-container > div').forEach(qDiv => {
                 const type = qDiv.dataset.type; const manualCb = qDiv.querySelector('.manual-grade-check'); const isManual = manualCb && manualCb.checked;
                 const question = { type, text: qDiv.querySelector('textarea').value, points: parseInt(qDiv.querySelector('input[type="number"]').value,10)||10, manualGrading: isManual };
+                const imgData = qDiv.querySelector('.q-image-data'); if (imgData && imgData.value) question.image = imgData.value;
                 if (!isManual) {
                     switch (type) {
                         case 'mcq': question.options = Array.from(qDiv.querySelectorAll('.options-container input[type="text"]')).map(o=>o.value); const cr = qDiv.querySelector('input[type="radio"]:checked'); question.correctAnswer = cr?parseInt(cr.value,10):-1; break;
                         case 'multiple-response': question.options = Array.from(qDiv.querySelectorAll('.options-container input[type="text"]')).map(o=>o.value); question.correctAnswers = Array.from(qDiv.querySelectorAll('input[type="checkbox"]:checked')).map(cb=>parseInt(cb.value,10)); break;
                         case 'true-false': const tfr = qDiv.querySelector('input[type="radio"]:checked'); question.correctAnswer = tfr?(tfr.value==='true'):null; break;
                         case 'numeric': question.correctAnswer = parseFloat(qDiv.querySelector('.numeric-answer').value); question.tolerance = parseFloat(qDiv.querySelector('.numeric-tolerance').value)||0; break;
-                        case 'fill-blank': question.blanks = qDiv.querySelector('.fill-blank-answers').value.split(',').map(s=>s.trim().toLowerCase()).filter(s=>s); break;
+                        case 'fill-blank': question.blanks = qDiv.querySelector('.fill-blank-answers').value.split(',').map(s=>s.trim()).filter(s=>s); break;
                         case 'matching': question.pairs = []; qDiv.querySelectorAll('.matching-pair').forEach(p => { const ins = p.querySelectorAll('input[type="text"]'); if(ins[0].value&&ins[1].value) question.pairs.push({prompt:ins[0].value,answer:ins[1].value}); }); break;
                         case 'ordering': question.items = []; qDiv.querySelectorAll('.ordering-item input[type="text"]').forEach(inp => { if(inp.value.trim()) question.items.push(inp.value.trim()); }); break;
                         case 'code': const langSel = qDiv.querySelector('.code-language'); question.language = langSel?langSel.value:'python'; break;
@@ -1845,6 +2038,7 @@
                     <div class="flex items-start gap-3 mb-3">
                         <span class="bg-indigo-500/20 text-indigo-400 w-7 h-7 rounded-full flex items-center justify-center font-bold flex-shrink-0 text-sm">${index+1}</span>
                         <div><p class="text-base font-medium leading-relaxed math-content" style="color:var(--text-heading)">${q.text}</p>
+                            ${q.image ? `<img src="${q.image}" class="q-image-preview mt-2">` : ''}
                             <span class="text-xs font-semibold mt-0.5 inline-block" style="color:var(--text-muted)">${q.points} pts</span></div>
                     </div><div class="pl-10">`;
 
@@ -1877,22 +2071,22 @@
                             <div class="text-base leading-loose math-content" style="color:var(--text-secondary)">${blankedText}</div>
                             <span class="text-xs font-semibold mt-3 inline-block" style="color:var(--text-muted)">${q.points} pts</span></div>`; break;
                     case 'matching':
-                        const prompts = q.pairs.map(p=>p.prompt);
-                        const answers = [...q.pairs.map(p=>p.answer)].sort(()=>Math.random()-0.5);
-                        qHTML += `<div class="grid grid-cols-1 gap-2">
-                            <div class="grid grid-cols-2 gap-4 mb-2">
-                                <div class="space-y-2">
-                                    <p class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">Prompts</p>
-                                    ${prompts.map((p,i) => `<div class="p-3 glass-input rounded-xl text-sm font-medium" style="color:var(--text-secondary)" data-prompt-idx="${i}">${p}</div>`).join('')}
+                        const prompts_m = q.pairs.map(p=>p.prompt);
+                        const answers_m = [...q.pairs.map(p=>p.answer)].sort(()=>Math.random()-0.5);
+                        const matchId = `match-${index}`;
+                        qHTML += `<div class="matching-line-container relative" id="${matchId}" data-pairs='${JSON.stringify(q.pairs)}'>
+                            <svg class="match-svg-container" id="svg-${matchId}"></svg>
+                            <div class="grid grid-cols-2 gap-8">
+                                <div class="space-y-3">
+                                    <p class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">Terms</p>
+                                    ${prompts_m.map((p,i) => `<div class="match-node match-left" data-match-id="${matchId}" data-side="left" data-idx="${i}">${p}</div>`).join('')}
                                 </div>
-                                <div class="space-y-2">
-                                    <p class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">Drag answers here</p>
-                                    ${prompts.map((_, i) => `<div class="drop-zone p-3 glass-input rounded-xl text-sm min-h-[44px] flex items-center" style="color:var(--text-muted);border:2px dashed var(--border-color)" data-drop-idx="${i}" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="handleMatchDrop(event,this)"><span class="text-xs">Drop here...</span></div>`).join('')}
+                                <div class="space-y-3">
+                                    <p class="text-[10px] font-bold uppercase" style="color:var(--text-muted)">Definitions</p>
+                                    ${answers_m.map((a,i) => `<div class="match-node match-right" data-match-id="${matchId}" data-side="right" data-idx="${i}" data-value="${a.replace(/"/g,'&quot;')}">${a}</div>`).join('')}
                                 </div>
                             </div>
-                            <div class="flex flex-wrap gap-2 mt-2 drag-source-container">
-                                ${answers.map(ans => `<div class="drag-item px-3 py-2 glass-input rounded-xl text-sm font-medium cursor-grab" style="color:var(--text-primary);border:2px solid var(--border-color)" draggable="true" ondragstart="event.dataTransfer.setData('text/plain',this.textContent);this.classList.add('dragging')" ondragend="this.classList.remove('dragging')">${ans}</div>`).join('')}
-                            </div>
+                            <p class="text-[10px] mt-3 text-center" style="color:var(--text-muted)">Click a term, then click its matching definition to draw a line. Click a line to remove it.</p>
                         </div>`; break;
                     case 'ordering':
                         const shuffled = [...q.items].sort(()=>Math.random()-0.5);
@@ -1920,7 +2114,12 @@
             });
 
             document.getElementById('student-math-toolbar').classList.toggle('view-hidden', !hasNumeric);
-            setTimeout(() => { document.querySelectorAll('.math-content').forEach(el => renderMathInEl(el)); }, 200);
+            setTimeout(() => {
+                document.querySelectorAll('.math-content').forEach(el => renderMathInEl(el));
+                initMatchingLineUI();
+                // Render lines after layout settles
+                setTimeout(() => { Object.keys(window._matchConnections).forEach(mid => renderMatchLines(mid)); }, 100);
+            }, 200);
             document.querySelectorAll('.student-math-input').forEach(inp => {
                 inp.addEventListener('input', function() {
                     const previewEl = this.parentElement.querySelector('.student-math-preview');
@@ -1934,7 +2133,157 @@
             setupQuestionTracking(examCode, studentId, studentName);
         }
 
-        // Drag & Drop for matching
+        // ---- IMAGE HANDLING FOR QUESTIONS ----
+        function handleQuestionImage(input, imgId) {
+            const file = input.files[0]; if (!file) return;
+            if (file.size > 2 * 1024 * 1024) { showToast("Image must be under 2MB.", 'error'); return; }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const dataUrl = e.target.result;
+                const img = document.getElementById(imgId);
+                img.src = dataUrl; img.classList.remove('hidden');
+                const hiddenInput = img.parentElement.querySelector('.q-image-data');
+                if (hiddenInput) hiddenInput.value = dataUrl;
+                const removeBtn = img.parentElement.querySelector('button');
+                if (removeBtn) removeBtn.classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        }
+        window.handleQuestionImage = handleQuestionImage;
+
+        function removeQuestionImage(imgId, btn) {
+            const img = document.getElementById(imgId);
+            img.src = ''; img.classList.add('hidden');
+            const hiddenInput = img.parentElement.querySelector('.q-image-data');
+            if (hiddenInput) hiddenInput.value = '';
+            btn.classList.add('hidden');
+        }
+        window.removeQuestionImage = removeQuestionImage;
+
+        // ---- LINE-DRAWING MATCHING ----
+        window._matchConnections = {};
+        window._matchSelected = null;
+
+        function initMatchingLineUI() {
+            document.querySelectorAll('.matching-line-container').forEach(container => {
+                const matchId = container.id;
+                if (!window._matchConnections[matchId]) window._matchConnections[matchId] = [];
+                container.querySelectorAll('.match-node').forEach(node => {
+                    node.addEventListener('click', () => handleMatchNodeClick(node, matchId));
+                });
+                // Make SVG lines clickable to remove
+                const svg = container.querySelector('svg');
+                if (svg) {
+                    svg.addEventListener('click', (e) => {
+                        if (e.target.classList.contains('match-line')) {
+                            const lineIdx = parseInt(e.target.dataset.connIdx);
+                            removeMatchConnection(matchId, lineIdx);
+                        }
+                    });
+                }
+            });
+        }
+
+        function handleMatchNodeClick(node, matchId) {
+            const side = node.dataset.side;
+            const idx = parseInt(node.dataset.idx);
+
+            if (!window._matchSelected) {
+                // First selection
+                window._matchSelected = { side, idx, node, matchId };
+                node.classList.add('selected');
+            } else if (window._matchSelected.matchId !== matchId) {
+                // Different matching container, reset
+                window._matchSelected.node.classList.remove('selected');
+                window._matchSelected = { side, idx, node, matchId };
+                node.classList.add('selected');
+            } else if (window._matchSelected.side === side) {
+                // Same side clicked — switch selection
+                window._matchSelected.node.classList.remove('selected');
+                if (window._matchSelected.idx === idx) { window._matchSelected = null; return; }
+                window._matchSelected = { side, idx, node, matchId };
+                node.classList.add('selected');
+            } else {
+                // Different side — make connection
+                const leftIdx = side === 'left' ? idx : window._matchSelected.idx;
+                const rightIdx = side === 'right' ? idx : window._matchSelected.idx;
+                const rightNode = side === 'right' ? node : window._matchSelected.node;
+                const rightValue = rightNode.dataset.value || rightNode.textContent;
+
+                // Remove existing connections to same left or right
+                window._matchConnections[matchId] = window._matchConnections[matchId].filter(c => c.leftIdx !== leftIdx && c.rightIdx !== rightIdx);
+
+                window._matchConnections[matchId].push({ leftIdx, rightIdx, rightValue });
+                window._matchSelected.node.classList.remove('selected');
+                window._matchSelected = null;
+
+                renderMatchLines(matchId);
+                updateMatchNodeStyles(matchId);
+            }
+        }
+
+        function removeMatchConnection(matchId, connIdx) {
+            window._matchConnections[matchId].splice(connIdx, 1);
+            renderMatchLines(matchId);
+            updateMatchNodeStyles(matchId);
+        }
+
+        function renderMatchLines(matchId) {
+            const container = document.getElementById(matchId);
+            if (!container) return;
+            const svg = container.querySelector('svg');
+            if (!svg) return;
+            const containerRect = container.getBoundingClientRect();
+            svg.innerHTML = '';
+            const connections = window._matchConnections[matchId] || [];
+
+            connections.forEach((conn, ci) => {
+                const leftNode = container.querySelector(`.match-left[data-idx="${conn.leftIdx}"]`);
+                const rightNode = container.querySelector(`.match-right[data-idx="${conn.rightIdx}"]`);
+                if (!leftNode || !rightNode) return;
+
+                const lr = leftNode.getBoundingClientRect();
+                const rr = rightNode.getBoundingClientRect();
+
+                const x1 = lr.right - containerRect.left;
+                const y1 = lr.top + lr.height / 2 - containerRect.top;
+                const x2 = rr.left - containerRect.left;
+                const y2 = rr.top + rr.height / 2 - containerRect.top;
+
+                const midX = (x1 + x2) / 2;
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', `M${x1},${y1} C${midX},${y1} ${midX},${y2} ${x2},${y2}`);
+                path.classList.add('match-line');
+                path.dataset.connIdx = ci;
+                path.style.pointerEvents = 'stroke';
+                path.style.cursor = 'pointer';
+                svg.appendChild(path);
+            });
+        }
+
+        function updateMatchNodeStyles(matchId) {
+            const container = document.getElementById(matchId);
+            if (!container) return;
+            const connections = window._matchConnections[matchId] || [];
+            container.querySelectorAll('.match-node').forEach(node => {
+                node.classList.remove('connected');
+                const side = node.dataset.side;
+                const idx = parseInt(node.dataset.idx);
+                const isConnected = connections.some(c => (side === 'left' ? c.leftIdx : c.rightIdx) === idx);
+                if (isConnected) node.classList.add('connected');
+            });
+        }
+
+        // Redraw lines on resize
+        let matchResizeTimer = null;
+        window.addEventListener('resize', () => {
+            clearTimeout(matchResizeTimer);
+            matchResizeTimer = setTimeout(() => {
+                Object.keys(window._matchConnections).forEach(matchId => renderMatchLines(matchId));
+            }, 100);
+        });
+
+        // Drag & Drop for matching (legacy, kept for backwards compat)
         function handleMatchDrop(e, dropZone) {
             e.preventDefault();
             dropZone.classList.remove('drag-over');
@@ -2037,26 +2386,70 @@
                     case 'true-false': { const tfr = qDiv.querySelector('input[type="radio"]:checked'); studentAnswer = tfr ? (tfr.value==='true') : null; displayAnswer = studentAnswer !== null ? (studentAnswer ? 'True' : 'False') : 'No answer'; break; }
                     case 'numeric': { const ni = qDiv.querySelector('input[type="text"].student-math-input, input[type="number"]'); const rawVal = ni ? ni.value.trim() : ''; studentAnswer = rawVal !== '' ? parseFloat(rawVal) : null; if (isNaN(studentAnswer) && rawVal) { try { const cleaned = rawVal.replace(/\\pi/g, String(Math.PI)).replace(/\\times/g, '*').replace(/\\div/g, '/').replace(/[\\{}$]/g, ''); studentAnswer = parseFloat(cleaned); } catch(e) { studentAnswer = null; } } displayAnswer = rawVal || 'No answer'; break; }
                     case 'fill-blank': { studentAnswer = Array.from(qDiv.querySelectorAll('input[type="text"]')).map(inp=>inp.value.trim()); displayAnswer = studentAnswer.filter(s=>s).join(', ') || 'No answer'; break; }
-                    case 'matching': { const dropZones = qDiv.querySelectorAll('.drop-zone'); studentAnswer = Array.from(dropZones).map(dz=>dz.dataset.value||''); displayAnswer = studentAnswer.filter(s=>s).join(', ') || 'No answer'; break; }
+                    case 'matching': { const matchContainer = qDiv.querySelector('.matching-line-container'); const matchId = matchContainer ? matchContainer.id : ''; const connections = window._matchConnections && window._matchConnections[matchId] ? window._matchConnections[matchId] : []; const leftNodes = qDiv.querySelectorAll('.match-left'); studentAnswer = Array.from(leftNodes).map((node, idx) => { const conn = connections.find(c => c.leftIdx === idx); return conn ? conn.rightValue : ''; }); displayAnswer = studentAnswer.filter(s=>s).join(', ') || 'No answer'; break; }
                     case 'ordering': { studentAnswer = Array.from(qDiv.querySelectorAll('.sortable-item')).map(item => item.querySelector('span:last-child')?.textContent || ''); displayAnswer = studentAnswer.join(' → ') || 'No answer'; break; }
                     case 'code': case 'short': case 'long': { studentAnswer = qDiv.querySelector('textarea')?.value || ''; displayAnswer = studentAnswer || 'No answer'; break; }
                 }
-                const answerData = { questionText: question.text, studentAnswer, displayAnswer, maxPoints: question.points, isManual: question.manualGrading };
+                const answerData = { questionText: question.text, studentAnswer, displayAnswer, maxPoints: question.points, isManual: question.manualGrading, score: null };
                 if (question.manualGrading) { answerData.score = null; answerData.feedback = 'Pending manual grading'; submissionAnswers[i] = answerData; return Promise.resolve(); }
                 else if (['short','long','code'].includes(question.type)) {
                     return evaluateWithAI(question.text, studentAnswer || "").then(r => { answerData.score = r.score * question.points; answerData.feedback = r.feedback; submissionAnswers[i] = answerData; });
                 } else {
+
+        // Levenshtein distance for fuzzy matching
+        function levenshteinDistance(a, b) {
+            const m = a.length, n = b.length;
+            const dp = Array.from({length: m + 1}, () => Array(n + 1).fill(0));
+            for (let i = 0; i <= m; i++) dp[i][0] = i;
+            for (let j = 0; j <= n; j++) dp[0][j] = j;
+            for (let i = 1; i <= m; i++) {
+                for (let j = 1; j <= n; j++) {
+                    dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+                }
+            }
+            return dp[m][n];
+        }
+        function fuzzyMatch(student, correct, threshold) {
+            if (!threshold) threshold = Math.max(1, Math.floor(correct.length * 0.25));
+            return levenshteinDistance(student, correct) <= threshold;
+        }
+
                     let isCorrect = false; let incorrectFeedback = 'Incorrect';
                     switch (question.type) {
                         case 'mcq': isCorrect = studentAnswer === question.correctAnswer; if (!isCorrect && question.options?.[question.correctAnswer]) incorrectFeedback = `Answer: ${question.options[question.correctAnswer]}`; break;
                         case 'true-false': isCorrect = studentAnswer === question.correctAnswer; if (!isCorrect) incorrectFeedback = `Answer: ${question.correctAnswer ? 'True' : 'False'}`; break;
                         case 'multiple-response': if (studentAnswer && question.correctAnswers) { const cs = new Set(question.correctAnswers); const ss = new Set(studentAnswer); isCorrect = cs.size === ss.size && [...cs].every(x=>ss.has(x)); } if (!isCorrect && question.correctAnswers && question.options) incorrectFeedback = `Answer: ${question.correctAnswers.map(idx => question.options[idx]).join(', ')}`; break;
                         case 'numeric': if (studentAnswer !== null && !isNaN(studentAnswer)) isCorrect = Math.abs(studentAnswer - question.correctAnswer) <= (question.tolerance||0); if (!isCorrect) incorrectFeedback = `Answer: ${question.correctAnswer}`; break;
-                        case 'fill-blank': if (studentAnswer?.length === question.blanks?.length) isCorrect = studentAnswer.every((a,j)=>a.trim().toLowerCase()===question.blanks[j]); if (!isCorrect && question.blanks?.length) incorrectFeedback = `Answer: ${question.blanks.join(', ')}`; break;
+                        case 'fill-blank': {
+                            const correctBlanks = question.blanks || [];
+                            const studentBlanks = (studentAnswer || []).map(a => a.trim().toLowerCase()).filter(a => a);
+                            const correctSet = correctBlanks.map(b => b.trim().toLowerCase());
+                            let matchCount = 0;
+                            const matchedIndices = new Set();
+                            studentBlanks.forEach(sa => {
+                                // Try exact match first
+                                let idx = correctSet.findIndex((cb, i) => !matchedIndices.has(i) && sa === cb);
+                                // Then try fuzzy/typo-tolerant match (Levenshtein distance)
+                                if (idx === -1) idx = correctSet.findIndex((cb, i) => !matchedIndices.has(i) && fuzzyMatch(sa, cb));
+                                // Then try: student answer is contained in a correct answer (e.g. "thylakoid" matches "thylakoid membrane")
+                                if (idx === -1) idx = correctSet.findIndex((cb, i) => !matchedIndices.has(i) && cb.includes(sa) && sa.length >= 3);
+                                // Or correct answer is contained in student answer
+                                if (idx === -1) idx = correctSet.findIndex((cb, i) => !matchedIndices.has(i) && sa.includes(cb) && cb.length >= 3);
+                                if (idx !== -1) { matchCount++; matchedIndices.add(idx); }
+                            });
+                            if (matchCount === correctSet.length && correctSet.length > 0) {
+                                isCorrect = true;
+                            } else if (matchCount > 0) {
+                                isCorrect = false;
+                                answerData.score = Math.round((matchCount / correctSet.length) * question.points);
+                            }
+                            if (!isCorrect && correctBlanks.length) incorrectFeedback = `Answer: ${correctBlanks.join(', ')} (You got ${matchCount}/${correctSet.length} correct)`;
+                            break;
+                        }
                         case 'matching': if (studentAnswer?.length === question.pairs?.length) isCorrect = studentAnswer.every((a,j)=>a===question.pairs[j].answer); if (!isCorrect && question.pairs) incorrectFeedback = `Answer: ${question.pairs.map(p => p.prompt + ' → ' + p.answer).join(', ')}`; break;
                         case 'ordering': if (studentAnswer?.length === question.items?.length) isCorrect = studentAnswer.every((a,j)=>a===question.items[j]); if (!isCorrect && question.items) incorrectFeedback = `Answer: ${question.items.join(' → ')}`; break;
                     }
-                    answerData.score = isCorrect ? question.points : 0;
+                    if (answerData.score === null) answerData.score = isCorrect ? question.points : 0;
                     answerData.feedback = isCorrect ? 'Correct' : incorrectFeedback;
                     submissionAnswers[i] = answerData;
                     return Promise.resolve();
