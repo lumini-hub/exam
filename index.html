@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
@@ -937,6 +936,13 @@
                         Watch: How to get a free YouTube API key
                     </a>
                 </div>
+                <div class="p-3.5 rounded-xl" style="background:var(--bg-input);border:1px solid var(--border-color)">
+                    <p class="text-xs font-bold uppercase tracking-wider mb-2.5 flex items-center gap-1.5" style="color:var(--text-muted)">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        Groq API Usage
+                    </p>
+                    <div id="groq-usage-display"><p class="text-[11px]" style="color:var(--text-muted)">Usage info will appear here after your next AI action.</p></div>
+                </div>
             </div>
             <div class="flex justify-end gap-3 mt-4">
                 <button id="settings-cancel-btn" class="px-5 py-2.5 rounded-xl font-medium hover:bg-white/5 transition-colors" style="color:var(--text-secondary)">Cancel</button>
@@ -946,46 +952,68 @@
     </div>
 
     <!-- AI Generator Modal -->
-    <div id="ai-generator-modal" class="fixed inset-0 bg-black/60 backdrop-blur-md z-[80] hidden flex items-center justify-center transition-all duration-300 opacity-0">
-        <div class="glass-panel rounded-2xl shadow-2xl p-0 max-w-lg w-full mx-4 transform scale-95 transition-all duration-300 overflow-hidden" id="ai-modal-content">
-            <div class="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 p-6 text-white relative overflow-hidden">
-                <div class="absolute top-0 right-0 w-40 h-40 bg-white opacity-10 rounded-full blur-3xl transform translate-x-10 -translate-y-10"></div>
-                <h3 class="text-2xl font-bold flex items-center gap-2 relative z-10">✨ AI Question Maker</h3>
-                <p class="text-white/70 text-sm mt-1">Describe what you want, and let AI do the rest.</p>
+    <div id="ai-generator-modal" class="fixed inset-0 bg-black/60 backdrop-blur-md z-[80] hidden flex items-center justify-center transition-all duration-300 opacity-0 p-4">
+        <div class="glass-panel rounded-3xl shadow-2xl p-0 max-w-lg w-full transform scale-95 transition-all duration-300 overflow-hidden flex flex-col" id="ai-modal-content" style="max-height:92vh">
+            <div class="bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 p-6 text-white relative overflow-hidden flex-shrink-0">
+                <div class="absolute top-0 right-0 w-48 h-48 bg-white opacity-10 rounded-full blur-3xl transform translate-x-12 -translate-y-12"></div>
+                <div class="absolute bottom-0 left-1/4 w-32 h-32 bg-white opacity-5 rounded-full blur-2xl"></div>
+                <div class="flex items-center gap-3 relative z-10">
+                    <div class="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center text-2xl border border-white/20 flex-shrink-0">✨</div>
+                    <div>
+                        <h3 class="text-xl font-extrabold">AI Question Maker</h3>
+                        <p class="text-white/75 text-xs mt-0.5">Describe it — AI builds the questions</p>
+                    </div>
+                </div>
             </div>
-            <div class="p-6 space-y-5">
+            <div class="p-6 space-y-5 overflow-y-auto">
                 <div>
-                    <label class="block text-sm font-bold mb-2" style="color:var(--text-secondary)">Topic or Concept</label>
-                    <input type="text" id="ai-topic-input" placeholder="e.g. Quantum Physics, French Revolution..." class="w-full p-3.5 glass-input rounded-xl focus:outline-none">
+                    <label class="block text-xs font-bold uppercase tracking-wider mb-2" style="color:var(--text-muted)">Topic or Concept</label>
+                    <input type="text" id="ai-topic-input" placeholder="e.g. Newton's laws, French Revolution, photosynthesis..." class="w-full p-3.5 glass-input rounded-xl focus:outline-none text-sm" style="color:var(--text-primary)">
+                    <div class="flex flex-wrap gap-1.5 mt-2" id="ai-topic-suggestions"></div>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-bold mb-2" style="color:var(--text-secondary)">Question Type</label>
-                        <select id="ai-type-select" class="w-full p-3.5 glass-input rounded-xl focus:outline-none">
-                            <option value="mcq">Multiple Choice</option>
-                            <option value="true-false">True / False</option>
-                            <option value="short">Short Answer</option>
-                            <option value="fill-blank">Fill in Blank</option>
-                            <option value="numeric">Numeric</option>
-                            <option value="ordering">Ordering</option>
-                            <option value="matching">Matching</option>
-                            <option value="code">Code</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-bold mb-2" style="color:var(--text-secondary)">Difficulty</label>
-                        <select id="ai-difficulty-select" class="w-full p-3.5 glass-input rounded-xl focus:outline-none">
-                            <option value="easy">Easy</option>
-                            <option value="medium" selected>Medium</option>
-                            <option value="hard">Hard</option>
-                        </select>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider mb-2" style="color:var(--text-muted)">Question Type</label>
+                    <select id="ai-type-select" class="w-full p-3.5 glass-input rounded-xl focus:outline-none text-sm" style="color:var(--text-primary)">
+                        <option value="auto">🎲 Auto — mixed types</option>
+                        <option value="mcq">📝 Multiple Choice</option>
+                        <option value="multiple-response">☑️ Multiple Response</option>
+                        <option value="true-false">✅ True / False</option>
+                        <option value="short">✏️ Short Answer</option>
+                        <option value="long">📄 Essay</option>
+                        <option value="fill-blank">📋 Fill in the Blank</option>
+                        <option value="numeric">🔢 Numeric</option>
+                        <option value="ordering">🔀 Ordering</option>
+                        <option value="matching">🔗 Matching</option>
+                        <option value="code">💻 Code</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider mb-2" style="color:var(--text-muted)">Difficulty</label>
+                    <div class="grid grid-cols-4 gap-2" id="ai-difficulty-group">
+                        <button data-diff="easy" class="ai-diff-opt text-xs font-bold py-2.5 rounded-xl transition" style="background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-primary)">Easy</button>
+                        <button data-diff="medium" class="ai-diff-opt text-xs font-bold py-2.5 rounded-xl transition" style="background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-primary)">Medium</button>
+                        <button data-diff="hard" class="ai-diff-opt text-xs font-bold py-2.5 rounded-xl transition" style="background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-primary)">Hard</button>
+                        <button data-diff="mixed" class="ai-diff-opt text-xs font-bold py-2.5 rounded-xl transition" style="background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-primary)">Mixed</button>
                     </div>
                 </div>
+
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="text-xs font-bold uppercase tracking-wider" style="color:var(--text-muted)">How many?</label>
+                        <span id="ai-count-display" class="text-sm font-extrabold px-2.5 py-0.5 rounded-lg" style="background:var(--bg-input);color:var(--text-heading)">1</span>
+                    </div>
+                    <input type="range" id="ai-count-slider" min="1" max="5" value="1" step="1" class="w-full accent-purple-500" oninput="document.getElementById('ai-count-display').textContent=this.value">
+                    <div class="flex justify-between text-[10px] mt-1" style="color:var(--text-muted)"><span>1</span><span>5</span></div>
+                </div>
+
                 <div class="pt-1">
-                    <button id="ai-generate-confirm" class="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white font-bold py-3.5 rounded-xl hover:shadow-lg hover:shadow-purple-500/25 transition-all btn-lift flex items-center justify-center gap-2">
-                        <span>Generate Question</span> ✨
+                    <button id="ai-generate-confirm" class="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white font-bold py-3.5 rounded-xl hover:shadow-lg hover:shadow-purple-500/25 transition-all btn-lift flex items-center justify-center gap-2 text-sm">
+                        <span>Generate</span> ✨
                     </button>
-                    <button id="ai-modal-cancel" class="w-full mt-3 font-semibold hover:opacity-80 transition py-2" style="color:var(--text-muted)">Cancel</button>
+                    <div id="ai-gen-progress" class="hidden mt-3 text-center text-xs" style="color:var(--text-muted)"></div>
+                    <button id="ai-modal-cancel" class="w-full mt-2 font-semibold hover:opacity-80 transition py-2 text-sm" style="color:var(--text-muted)">Cancel</button>
                 </div>
             </div>
         </div>
@@ -1412,6 +1440,10 @@
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
+                        <button id="header-usage-chip" onclick="openSettingsModal()" class="hidden items-center gap-1.5 glass-input px-2.5 py-1.5 rounded-xl transition hover:border-indigo-500/30" title="Groq API usage — click for details">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" style="color:#34d399"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                            <span id="header-usage-text" class="text-[11px] font-bold" style="color:var(--text-secondary)">—</span>
+                        </button>
                         <button id="nav-profile-btn" class="hidden rounded-full transition-all duration-200 hover:scale-105 active:scale-95" onclick="openMyProfile()" title="My Profile"></button>
                         <button id="nav-friends-btn" class="glass-input p-2.5 rounded-xl hover:border-indigo-500/30 transition-all duration-200 hover:scale-105 active:scale-95 relative" style="color:var(--text-secondary)" onclick="openFriendsView()" title="Friends">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a4 4 0 00-3-3.87"/></svg>
@@ -1920,6 +1952,17 @@
 
                         <!-- Mobile question type bar -->
                         <div class="editor-sidebar flex md:hidden mb-4" id="mobile-editor-sidebar"></div>
+
+                        <!-- Live summary bar -->
+                        <div id="editor-summary-bar" class="hidden flex items-center gap-4 flex-wrap mb-4 p-3 rounded-xl" style="background:var(--bg-input);border:1px solid var(--border-color)">
+                            <div class="flex items-center gap-1.5"><span class="text-lg font-extrabold" style="color:var(--text-heading)" id="summary-qcount">0</span><span class="text-xs font-medium" style="color:var(--text-muted)">questions</span></div>
+                            <div class="w-px h-5" style="background:var(--border-color)"></div>
+                            <div class="flex items-center gap-1.5"><span class="text-lg font-extrabold" style="color:#34d399" id="summary-points">0</span><span class="text-xs font-medium" style="color:var(--text-muted)">total points</span></div>
+                            <div class="w-px h-5" style="background:var(--border-color)"></div>
+                            <div class="flex items-center gap-1.5"><span class="text-lg font-extrabold" style="color:#fbbf24" id="summary-manual">0</span><span class="text-xs font-medium" style="color:var(--text-muted)">manually graded</span></div>
+                            <div class="flex-1"></div>
+                            <button onclick="_collapseAllQuestions()" id="collapse-all-btn" class="text-[11px] font-bold py-1.5 px-3 rounded-lg transition" style="background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-primary)">Collapse all</button>
+                        </div>
 
                         <div id="questions-container" class="space-y-4 mb-6"></div>
 
@@ -2473,7 +2516,7 @@
             return systemApiKey;
         };
 
-        const openSettingsModal = async () => { const modal = document.getElementById('api-key-modal'); const content = document.getElementById('api-key-modal-content'); const input = document.getElementById('settings-api-key-input'); const currentKey = await getGroqApiKey(); if (currentKey && currentKey !== initialKey) input.value = currentKey; else input.value = ''; const ytInput = document.getElementById('settings-yt-key-input'); if (ytInput) ytInput.value = await getYouTubeApiKey() || ''; modal.classList.remove('hidden'); requestAnimationFrame(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); content.classList.add('scale-100'); }); input.focus(); };
+        const openSettingsModal = async () => { const modal = document.getElementById('api-key-modal'); const content = document.getElementById('api-key-modal-content'); const input = document.getElementById('settings-api-key-input'); const currentKey = await getGroqApiKey(); if (currentKey && currentKey !== initialKey) input.value = currentKey; else input.value = ''; const ytInput = document.getElementById('settings-yt-key-input'); if (ytInput) ytInput.value = await getYouTubeApiKey() || ''; _renderGroqUsage(); modal.classList.remove('hidden'); requestAnimationFrame(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); content.classList.add('scale-100'); }); input.focus(); };
         const closeSettingsModal = () => { const modal = document.getElementById('api-key-modal'); const content = document.getElementById('api-key-modal-content'); modal.classList.add('opacity-0'); content.classList.remove('scale-100'); content.classList.add('scale-95'); setTimeout(() => modal.classList.add('hidden'), 300); };
         const saveSettings = async () => { const input = document.getElementById('settings-api-key-input'); const btn = document.getElementById('settings-save-btn'); const newKey = input.value.trim(); if (!newKey) { showToast("Please enter a valid API Key.", 'error'); return; } if (!currentUser) { showToast("You must be logged in.", 'error'); return; } const orig = btn.innerHTML; btn.innerHTML = 'Saving...'; btn.disabled = true; try { const ytKey = (document.getElementById('settings-yt-key-input')?.value || '').trim(); await db.collection('users').doc(currentUser.uid).set({ groqApiKey: newKey, youtubeApiKey: ytKey }, { merge: true }); systemApiKey = newKey; _youtubeApiKey = ytKey; showToast("Settings saved!"); closeSettingsModal(); } catch (error) { showToast("Failed to save.", 'error'); } finally { btn.innerHTML = orig; btn.disabled = false; } };
 
@@ -2487,26 +2530,65 @@
             return _youtubeApiKey;
         };
 
-        const showAIGeneratorModal = async () => { const key = await getGroqApiKey(); if(!key || key === initialKey) { await showAlert("API Key Required", "Configure your Groq API Key in Settings to use AI features."); openSettingsModal(); return; } const aiModal = document.getElementById('ai-generator-modal'); const aiContent = document.getElementById('ai-modal-content'); aiModal.classList.remove('hidden'); requestAnimationFrame(() => { aiModal.classList.remove('opacity-0'); aiContent.classList.remove('scale-95'); aiContent.classList.add('scale-100'); }); document.getElementById('ai-topic-input').focus(); };
+        const showAIGeneratorModal = async () => { const key = await getGroqApiKey(); if(!key || key === initialKey) { await showAlert("API Key Required", "Configure your Groq API Key in Settings to use AI features."); openSettingsModal(); return; } const aiModal = document.getElementById('ai-generator-modal'); const aiContent = document.getElementById('ai-modal-content'); aiModal.classList.remove('hidden'); requestAnimationFrame(() => { aiModal.classList.remove('opacity-0'); aiContent.classList.remove('scale-95'); aiContent.classList.add('scale-100'); }); _setAIDifficulty(_aiSelectedDifficulty || 'medium'); _renderAITopicSuggestions(); document.getElementById('ai-topic-input').focus(); };
+
+        function _setAIDifficulty(val) {
+            _aiSelectedDifficulty = val;
+            document.querySelectorAll('#ai-difficulty-group .ai-diff-opt').forEach(b => {
+                const on = b.dataset.diff === val;
+                b.style.background = on ? 'var(--accent)' : 'var(--bg-input)';
+                b.style.color = on ? 'white' : 'var(--text-primary)';
+                b.style.borderColor = on ? 'var(--accent)' : 'var(--border-color)';
+            });
+        }
+
+        // Suggest topics based on the exam title, if present
+        function _renderAITopicSuggestions() {
+            const el = document.getElementById('ai-topic-suggestions');
+            if (!el) return;
+            const title = (document.getElementById('exam-title')?.value || '').trim();
+            const chips = [];
+            if (title && title.length > 2 && !/^exam|^untitled|^new /i.test(title)) chips.push(title);
+            if (!chips.length) { el.innerHTML = ''; return; }
+            el.innerHTML = chips.map(c => `<button type="button" onclick="document.getElementById('ai-topic-input').value=this.textContent" class="text-[11px] font-bold py-1 px-2.5 rounded-full transition" style="background:var(--bg-input);border:1px solid var(--border-color);color:var(--text-muted)">↳ ${_escapeHtml(c)}</button>`).join('');
+        }
         const closeAIGeneratorModal = () => { const aiModal = document.getElementById('ai-generator-modal'); const aiContent = document.getElementById('ai-modal-content'); aiModal.classList.add('opacity-0'); aiContent.classList.remove('scale-100'); aiContent.classList.add('scale-95'); setTimeout(() => aiModal.classList.add('hidden'), 300); };
 
         const _aiGeneratedCache = new Set();
+        let _aiSelectedDifficulty = 'medium';
         const generateAIQuestion = async () => {
             const topic = document.getElementById('ai-topic-input').value.trim();
-            const type = document.getElementById('ai-type-select').value;
-            const difficulty = document.getElementById('ai-difficulty-select').value;
+            const typeSel = document.getElementById('ai-type-select').value;
+            const count = parseInt(document.getElementById('ai-count-slider').value, 10) || 1;
             const btn = document.getElementById('ai-generate-confirm');
+            const progressEl = document.getElementById('ai-gen-progress');
             if (!topic) { showToast("Please enter a topic.", 'error'); return; }
-            const origBtn = btn.innerHTML; btn.innerHTML = '<span class="loader w-5 h-5 border-2 border-white/50 border-t-white inline-block"></span> Generating...'; btn.disabled = true;
 
-            const existingQuestions = [];
-            document.querySelectorAll('#questions-container textarea').forEach(ta => { if(ta.value.trim()) existingQuestions.push(ta.value.trim().substring(0,120)); });
-            const avoidList = [..._aiGeneratedCache, ...existingQuestions].slice(-20);
-            const avoidSection = avoidList.length > 0 ? `\n\nCRITICAL — DO NOT repeat or rephrase any of these existing questions:\n${avoidList.map((q,i)=>`${i+1}. ${q}`).join('\n')}\nYour question MUST be substantially different in both wording and the specific concept tested.` : '';
+            const apiKey = await getGroqApiKey();
+            if (!apiKey || apiKey === initialKey) { showToast("Configure API Key in settings.", 'error'); return; }
 
-            const uniqueSeed = `Seed: ${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+            const origBtn = btn.innerHTML;
+            btn.disabled = true;
+            if (progressEl) progressEl.classList.remove('hidden');
 
-            const prompt = `${uniqueSeed}
+            const ALL_TYPES = ['mcq','true-false','short','fill-blank','numeric','ordering','matching'];
+            let generated = 0;
+
+            for (let i = 0; i < count; i++) {
+                btn.innerHTML = `<span class="loader w-5 h-5 border-2 border-white/50 border-t-white inline-block"></span> Generating ${i + 1}/${count}...`;
+                if (progressEl) progressEl.textContent = count > 1 ? `Question ${i + 1} of ${count}...` : '';
+
+                // Resolve type + difficulty (auto/mixed randomize per question)
+                const type = typeSel === 'auto' ? ALL_TYPES[Math.floor(Math.random() * ALL_TYPES.length)] : typeSel;
+                const difficulty = _aiSelectedDifficulty === 'mixed' ? ['easy','medium','hard'][Math.floor(Math.random() * 3)] : _aiSelectedDifficulty;
+
+                const existingQuestions = [];
+                document.querySelectorAll('#questions-container textarea').forEach(ta => { if(ta.value.trim()) existingQuestions.push(ta.value.trim().substring(0,120)); });
+                const avoidList = [..._aiGeneratedCache, ...existingQuestions].slice(-20);
+                const avoidSection = avoidList.length > 0 ? `\n\nCRITICAL — DO NOT repeat or rephrase any of these existing questions:\n${avoidList.map((q,i)=>`${i+1}. ${q}`).join('\n')}\nYour question MUST be substantially different in both wording and the specific concept tested.` : '';
+                const uniqueSeed = `Seed: ${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+
+                const prompt = `${uniqueSeed}
 You are an expert exam question writer with deep subject knowledge. Create ONE unique, high-quality "${type}" exam question about "${topic}".
 Difficulty: ${difficulty}.
 
@@ -2539,15 +2621,43 @@ If 'ordering': { "text": "...", "items": ["first","second","third","fourth"], "p
 If 'matching': { "text": "Match the following:", "pairs": [{"prompt":"Term A","answer":"Definition A"},{"prompt":"Term B","answer":"Definition B"},{"prompt":"Term C","answer":"Definition C"},{"prompt":"Term D","answer":"Definition D"}], "points": 10 }
 If 'code': { "text": "...", "language": "python", "points": 10 }
 Only return the JSON object, no other text.`;
-            try {
-                const apiKey = await getGroqApiKey(); if(!apiKey || apiKey === initialKey) throw new Error("Missing API Key");
-                const response = await fetch("https://api.groq.com/openai/v1/chat/completions", { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify({ model: "openai/gpt-oss-120b", messages: [{ role: "system", content: "You are a precise exam question generator. Every question you create must be factually accurate, unique, and have a verified correct answer. Never repeat questions. Always double-check that your marked answer is actually correct." }, { role: "user", content: prompt }], response_format: { type: "json_object" }, reasoning_effort: "low", max_tokens: 4000, temperature: 1.0, top_p: 0.95 }) });
-                if (!response.ok) throw new Error("API Error");
-                const data = await response.json(); const text = data.choices?.[0]?.message?.content;
-                if (text) { const qd = _parseAIJson(text); _aiGeneratedCache.add(qd.text?.substring(0,120) || ''); addQuestion(type, { ...qd, manualGrading: false }); closeAIGeneratorModal(); showToast("Question generated!"); const c = document.getElementById('questions-container'); setTimeout(() => c.lastElementChild?.scrollIntoView({behavior:'smooth'}), 100); }
-                else throw new Error("Empty response");
-            } catch (error) { showToast(error.message === "Missing API Key" ? "Configure API Key in settings." : "Failed to generate.", 'error'); }
-            finally { btn.innerHTML = origBtn; btn.disabled = false; }
+
+                try {
+                    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify({ model: "openai/gpt-oss-120b", messages: [{ role: "system", content: "You are a precise exam question generator. Every question you create must be factually accurate, unique, and have a verified correct answer. Never repeat questions. Always double-check that your marked answer is actually correct." }, { role: "user", content: prompt }], response_format: { type: "json_object" }, reasoning_effort: "low", max_tokens: 4000, temperature: 1.0, top_p: 0.95 }) });
+                    if (!response.ok) {
+                        if (response.status === 429) { showToast('Rate limit — pausing 20s...', 'info'); await new Promise(r => setTimeout(r, 20000)); i--; continue; }
+                        throw new Error("API error " + response.status);
+                    }
+                    _captureGroqUsage(response);
+                    const data = await response.json();
+                    const text = data.choices?.[0]?.message?.content;
+                    if (text) {
+                        const qd = _parseAIJson(text);
+                        _aiGeneratedCache.add((qd.text || '').substring(0,120));
+                        addQuestion(type, { ...qd, manualGrading: false });
+                        generated++;
+                    }
+                } catch (error) {
+                    console.error('AI gen error:', error);
+                    if (count === 1) { showToast("Failed to generate. " + (error.message || ''), 'error'); }
+                }
+                // Pace multi-question requests to respect the per-minute token cap
+                if (i < count - 1) await new Promise(r => setTimeout(r, 2500));
+            }
+
+            btn.innerHTML = origBtn;
+            btn.disabled = false;
+            if (progressEl) { progressEl.classList.add('hidden'); progressEl.textContent = ''; }
+
+            if (generated > 0) {
+                closeAIGeneratorModal();
+                showToast(`Generated ${generated} question${generated > 1 ? 's' : ''}!`);
+                const c = document.getElementById('questions-container');
+                setTimeout(() => c.lastElementChild?.scrollIntoView({behavior:'smooth'}), 100);
+                _updateEditorSummary();
+            } else {
+                showToast('Could not generate questions. Try again.', 'error');
+            }
         };
 
         window.autoSolveMCQ = async (questionId) => {
@@ -2561,7 +2671,7 @@ Only return the JSON object, no other text.`;
             try {
                 const response = await fetch("https://api.groq.com/openai/v1/chat/completions", { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`}, body: JSON.stringify({ model:"openai/gpt-oss-120b", messages:[{role:"user",content:`Analyze MCQ. Q:"${text}" Opts:${JSON.stringify(options)} Return JSON: {"correctIndex":0}`}], response_format:{type:"json_object"} }) });
                 if (!response.ok) throw new Error("API Failed");
-                const data = await response.json(); const content = data.choices?.[0]?.message?.content;
+                _captureGroqUsage(response); const data = await response.json(); const content = data.choices?.[0]?.message?.content;
                 if (content) { const r = JSON.parse(content); const idx = r.correctIndex; if (typeof idx==='number' && idx>=0 && idx<optionInputs.length) { const radios = qDiv.querySelectorAll('input[type="radio"]'); if(radios[idx]){radios[idx].checked=true;showToast("AI selected the answer.");} } else showToast("AI couldn't identify answer.",'error'); }
             } catch(e) { showToast("Failed to auto-solve.",'error'); }
             finally { btn.innerHTML = origHTML; btn.disabled = false; }
@@ -2621,7 +2731,7 @@ Text (first 3000 chars):
                 body: JSON.stringify({ model: "openai/gpt-oss-120b", messages: [{ role: "user", content: classifyPrompt }], response_format: { type: "json_object" }, reasoning_effort: "low", max_tokens: 1000, temperature: 0.1 })
             });
             if (!classifyResp.ok) throw new Error("AI Classification Failed");
-            const classifyData = await classifyResp.json();
+            _captureGroqUsage(classifyResp); const classifyData = await classifyResp.json();
             let classification; try { classification = _parseAIJson(classifyData.choices?.[0]?.message?.content || ''); } catch(e) { classification = { type: 'notes' }; }
             const isQuestionPaper = classification.type === 'questions';
 
@@ -2714,7 +2824,7 @@ Include only the fields relevant to each question type. For fill-blank, text MUS
                         errors.push(`Section ${ci + 1}: error ${response.status}`);
                         continue;
                     }
-                    const data = await response.json();
+                    _captureGroqUsage(response); const data = await response.json();
                     const jsonText = data.choices?.[0]?.message?.content;
                     const finishReason = data.choices?.[0]?.finish_reason;
                     if (!jsonText) { errors.push(`Section ${ci + 1}: empty response`); continue; }
@@ -3816,16 +3926,20 @@ Include only the fields relevant to each question type. For fill-blank, text MUS
 
             let html = `<div id="${questionId}" class="p-4 pl-10 glass-card rounded-xl relative q-card-enter q-editor-compact border-l-2 border-l-${c}-500" data-type="${type}">
                 <div class="q-drag-handle" style="color:var(--text-muted)" title="Drag to reorder"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg></div>
-                <button onclick="this.parentElement.style.transform='scale(0.95)';this.parentElement.style.opacity='0';setTimeout(()=>this.parentElement.remove(),200)" class="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-red-500/10 transition" style="color:var(--text-muted)"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg></button>
-                <div class="flex justify-between items-center mb-3 pr-8">
+                <div class="absolute top-3 right-3 flex items-center gap-0.5">
+                    <button onclick="_duplicateQuestionCard('${questionId}')" class="p-1.5 rounded-lg hover:bg-indigo-500/10 transition" style="color:var(--text-muted)" title="Duplicate question"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg></button>
+                    <button onclick="this.closest('.glass-card').style.transform='scale(0.95)';this.closest('.glass-card').style.opacity='0';setTimeout(()=>{this.closest('.glass-card').remove();_updateEditorSummary();},200)" class="p-1.5 rounded-lg hover:bg-red-500/10 transition" style="color:var(--text-muted)" title="Delete question"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg></button>
+                </div>
+                <div class="flex justify-between items-center mb-3 pr-16">
                     <div class="flex items-center gap-2">
+                        <span class="q-num-badge px-1.5 py-0.5 rounded-md text-[10px] font-bold" style="background:var(--bg-input);color:var(--text-muted)">#</span>
                         <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-${c}-500/15 text-${c}-400">${typeName}</span>
                         <label class="flex items-center gap-1.5 text-xs font-medium cursor-pointer transition" style="color:var(--text-muted)">
-                            <input type="checkbox" class="manual-grade-check h-3.5 w-3.5 rounded text-indigo-500" ${isManual ? 'checked' : ''}>Manual</label>
+                            <input type="checkbox" class="manual-grade-check h-3.5 w-3.5 rounded text-indigo-500" onchange="_updateEditorSummary()" ${isManual ? 'checked' : ''}>Manual</label>
                     </div>
                     <div class="flex items-center gap-1.5">
                         <label class="font-medium text-xs" style="color:var(--text-muted)">Pts:</label>
-                        <input type="number" value="${data ? data.points : 10}" min="1" class="w-14 p-1 glass-input rounded-lg text-center font-bold text-xs focus:outline-none" style="color:var(--text-heading)">
+                        <input type="number" value="${data ? data.points : 10}" min="1" onchange="_updateEditorSummary()" class="w-14 p-1 glass-input rounded-lg text-center font-bold text-xs focus:outline-none" style="color:var(--text-heading)">
                     </div>
                 </div>`;
 
@@ -3953,7 +4067,64 @@ Include only the fields relevant to each question type. For fill-blank, text MUS
                 }
                 if (data && data.text) { setTimeout(() => { const ta = document.getElementById(taId); const preview = document.getElementById(previewId); if(ta && preview) renderMathPreview(ta, preview); }, 100); }
             }
+            _updateEditorSummary();
         };
+
+        // ---- Editor summary bar: live question count + total points ----
+        function _updateEditorSummary() {
+            const bar = document.getElementById('editor-summary-bar');
+            if (!bar) return;
+            const cards = document.querySelectorAll('#questions-container > div');
+            let totalPts = 0, manualCount = 0;
+            cards.forEach((card, i) => {
+                const pts = parseInt(card.querySelector('input[type="number"]')?.value, 10) || 0;
+                totalPts += pts;
+                if (card.querySelector('.manual-grade-check')?.checked) manualCount++;
+                // Update the question-number badge
+                const badge = card.querySelector('.q-num-badge');
+                if (badge) badge.textContent = (i + 1);
+            });
+            document.getElementById('summary-qcount').textContent = cards.length;
+            document.getElementById('summary-points').textContent = totalPts;
+            const manualEl = document.getElementById('summary-manual');
+            if (manualEl) manualEl.textContent = manualCount;
+            bar.classList.toggle('hidden', cards.length === 0);
+        }
+
+        // ---- Duplicate a question card (reads its data and re-adds a copy right after) ----
+        function _duplicateQuestionCard(questionId) {
+            const card = document.getElementById(questionId);
+            if (!card) return;
+            const data = _qaSerializeSingle(card); // reuse the AI assistant's serializer
+            addQuestion(data.type, data);
+            // Move the new card (last) to just after the source card
+            const container = document.getElementById('questions-container');
+            const newCard = container.lastElementChild;
+            if (newCard && card.nextSibling !== newCard) card.parentNode.insertBefore(newCard, card.nextSibling);
+            _updateEditorSummary();
+            showToast('Question duplicated');
+        }
+        window._duplicateQuestionCard = _duplicateQuestionCard;
+        window._updateEditorSummary = _updateEditorSummary;
+
+        let _questionsCollapsed = false;
+        function _collapseAllQuestions() {
+            _questionsCollapsed = !_questionsCollapsed;
+            const cards = document.querySelectorAll('#questions-container > div');
+            cards.forEach(card => {
+                // Collapse everything below the header row
+                const children = Array.from(card.children);
+                children.forEach(ch => {
+                    if (ch.classList.contains('q-drag-handle')) return;
+                    if (ch.querySelector && ch.querySelector('.q-num-badge')) return; // keep header row
+                    if (ch.classList.contains('absolute')) return; // keep control buttons
+                    ch.style.display = _questionsCollapsed ? 'none' : '';
+                });
+            });
+            const btn = document.getElementById('collapse-all-btn');
+            if (btn) btn.textContent = _questionsCollapsed ? 'Expand all' : 'Collapse all';
+        }
+        window._collapseAllQuestions = _collapseAllQuestions;
 
         const saveExam = async () => {
             let title = document.getElementById('exam-title').value.trim();
@@ -4243,7 +4414,7 @@ Include only the fields relevant to each question type. For fill-blank, text MUS
                     body: JSON.stringify({ model: "openai/gpt-oss-120b", messages, response_format: { type: 'json_object' }, reasoning_effort: "low", max_tokens: 6000, temperature: 0.6 })
                 });
                 if (!response.ok) throw new Error(`API error ${response.status}`);
-                const data = await response.json();
+                _captureGroqUsage(response); const data = await response.json();
                 const parsed = _parseAIJson(data.choices?.[0]?.message?.content || '');
 
                 typing.remove();
@@ -4876,7 +5047,7 @@ RULES:
                 const apiKey = await getGroqApiKey(); if (!apiKey || apiKey === initialKey) throw new Error("Missing Key");
                 const response = await fetch("https://api.groq.com/openai/v1/chat/completions", { method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`}, body: JSON.stringify({ model:"openai/gpt-oss-120b", messages:[{role:"user",content:prompt}], response_format:{type:"json_object"} }) });
                 if (!response.ok) throw new Error(response.statusText);
-                const data = await response.json(); const text = data.choices?.[0]?.message?.content;
+                _captureGroqUsage(response); const data = await response.json(); const text = data.choices?.[0]?.message?.content;
                 return text ? JSON.parse(text) : { score: 0, feedback: "AI response empty." };
             } catch (error) { return { score: 0, feedback: "AI grading unavailable." }; }
         }
@@ -5475,6 +5646,73 @@ RULES:
         // Robustly extract JSON from an AI response. Reasoning models (gpt-oss) sometimes wrap
         // JSON in markdown fences, prepend reasoning text, or return it with trailing content.
         // This strips fences and isolates the outermost {...} object before parsing.
+        // Track Groq rate-limit usage from response headers (Groq sets these on every call).
+        // Browsers only expose these if CORS allows; we read what we can.
+        let _groqUsage = { remainingTokens: null, limitTokens: null, remainingRequests: null, limitRequests: null, resetTokens: null, updatedAt: null };
+        function _captureGroqUsage(response) {
+            try {
+                const h = response.headers;
+                const rt = h.get('x-ratelimit-remaining-tokens');
+                const lt = h.get('x-ratelimit-limit-tokens');
+                const rr = h.get('x-ratelimit-remaining-requests');
+                const lr = h.get('x-ratelimit-limit-requests');
+                const reset = h.get('x-ratelimit-reset-tokens');
+                if (rt !== null || rr !== null) {
+                    _groqUsage = {
+                        remainingTokens: rt !== null ? parseInt(rt, 10) : _groqUsage.remainingTokens,
+                        limitTokens: lt !== null ? parseInt(lt, 10) : _groqUsage.limitTokens,
+                        remainingRequests: rr !== null ? parseInt(rr, 10) : _groqUsage.remainingRequests,
+                        limitRequests: lr !== null ? parseInt(lr, 10) : _groqUsage.limitRequests,
+                        resetTokens: reset || _groqUsage.resetTokens,
+                        updatedAt: Date.now()
+                    };
+                    _renderGroqUsage();
+                }
+            } catch (e) { /* headers not accessible via CORS — silently ignore */ }
+        }
+
+        function _renderGroqUsage() {
+            // Update the compact header chip (always-visible live indicator)
+            const chip = document.getElementById('header-usage-chip');
+            const chipText = document.getElementById('header-usage-text');
+            const u0 = _groqUsage;
+            if (chip && chipText && (u0.remainingTokens !== null || u0.remainingRequests !== null)) {
+                chip.classList.remove('hidden');
+                chip.classList.add('flex');
+                if (u0.remainingTokens !== null) {
+                    const pct = u0.limitTokens ? Math.max(0, Math.round(u0.remainingTokens / u0.limitTokens * 100)) : null;
+                    chipText.textContent = u0.remainingTokens.toLocaleString() + (pct !== null ? ` (${pct}%)` : '') + ' tok';
+                    chipText.style.color = (pct !== null && pct < 20) ? '#f87171' : 'var(--text-secondary)';
+                } else if (u0.remainingRequests !== null) {
+                    chipText.textContent = u0.remainingRequests.toLocaleString() + ' req';
+                }
+            }
+            const el = document.getElementById('groq-usage-display');
+            if (!el) return;
+            const u = _groqUsage;
+            if (u.remainingTokens === null && u.remainingRequests === null) {
+                el.innerHTML = `<p class="text-[11px]" style="color:var(--text-muted)">Usage info will appear here after your next AI action.</p>`;
+                return;
+            }
+            const tokPct = (u.remainingTokens !== null && u.limitTokens) ? Math.max(0, Math.round(u.remainingTokens / u.limitTokens * 100)) : null;
+            const reqPct = (u.remainingRequests !== null && u.limitRequests) ? Math.max(0, Math.round(u.remainingRequests / u.limitRequests * 100)) : null;
+            let html = '';
+            if (u.remainingTokens !== null) {
+                html += `<div class="mb-2">
+                    <div class="flex justify-between text-[11px] mb-1"><span style="color:var(--text-secondary)">Tokens/min left</span><span class="font-bold" style="color:${tokPct !== null && tokPct < 20 ? '#f87171' : '#34d399'}">${u.remainingTokens.toLocaleString()}${u.limitTokens ? ' / ' + u.limitTokens.toLocaleString() : ''}</span></div>
+                    ${tokPct !== null ? `<div class="w-full h-1.5 rounded-full overflow-hidden" style="background:var(--bg-input)"><div class="h-full rounded-full" style="width:${tokPct}%;background:${tokPct < 20 ? '#ef4444' : '#10b981'}"></div></div>` : ''}
+                    ${u.resetTokens ? `<p class="text-[10px] mt-0.5" style="color:var(--text-muted)">Resets in ${u.resetTokens}</p>` : ''}
+                </div>`;
+            }
+            if (u.remainingRequests !== null) {
+                html += `<div>
+                    <div class="flex justify-between text-[11px] mb-1"><span style="color:var(--text-secondary)">Requests/day left</span><span class="font-bold" style="color:${reqPct !== null && reqPct < 20 ? '#f87171' : '#34d399'}">${u.remainingRequests.toLocaleString()}${u.limitRequests ? ' / ' + u.limitRequests.toLocaleString() : ''}</span></div>
+                    ${reqPct !== null ? `<div class="w-full h-1.5 rounded-full overflow-hidden" style="background:var(--bg-input)"><div class="h-full rounded-full" style="width:${reqPct}%;background:${reqPct < 20 ? '#ef4444' : '#10b981'}"></div></div>` : ''}
+                </div>`;
+            }
+            el.innerHTML = html;
+        }
+
         function _parseAIJson(raw) {
             if (!raw || typeof raw !== 'string') throw new Error('Empty AI response');
             let s = raw.trim();
@@ -5574,18 +5812,22 @@ RULES:
                 return;
             }
 
-            // Build prompt with source-aware mistakes
-            const mistakesPayload = mistakes.map((m, i) => ({
+            // Build prompt with source-aware mistakes.
+            // Cap the number of mistakes + trim text so input+output stays under the free-tier per-minute token cap (8K TPM).
+            const MAX_MISTAKES = 12;
+            const cappedMistakes = mistakes.slice(0, MAX_MISTAKES);
+            const mistakesPayload = cappedMistakes.map((m, i) => ({
                 mistakeId: i + 1,
                 sourceExam: m.sourceExamTitle,
                 sourceExamCode: m.sourceExamCode,
                 sourceQuestionNumber: m.sourceQuestionNumber,
-                question: (typeof m.questionText === 'string' ? m.questionText : String(m.questionText || '')).slice(0, 600),
-                yourAnswer: (typeof m.displayAnswer === 'string' ? m.displayAnswer : String(m.displayAnswer || 'No answer')).slice(0, 500),
-                feedback: m.feedback,
+                question: (typeof m.questionText === 'string' ? m.questionText : String(m.questionText || '')).slice(0, 300),
+                yourAnswer: (typeof m.displayAnswer === 'string' ? m.displayAnswer : String(m.displayAnswer || 'No answer')).slice(0, 200),
+                feedback: (typeof m.feedback === 'string' ? m.feedback : String(m.feedback || '')).slice(0, 200),
                 pointsEarned: m.score,
                 pointsMax: m.maxPoints
             }));
+            const mistakesCapped = mistakes.length > MAX_MISTAKES;
 
             const isMulti = selectedSubs.length > 1;
             const prompt = `You are an expert tutor helping a student learn from their mistakes across ${selectedSubs.length} exam${isMulti?'s':''}. Generate personalized study materials and track which exam/question each item comes from.
@@ -5594,6 +5836,7 @@ Selected exams: ${selectedSubs.map(s => `"${s.examTitle}" (code ${s.examCode})`)
 
 Student's mistakes:
 ${JSON.stringify(mistakesPayload, null, 2)}
+${mistakesCapped ? `\n(Note: showing the first ${MAX_MISTAKES} of ${mistakes.length} mistakes — focus on the most important concepts these represent.)` : ''}
 
 Generate study materials following EXACTLY this JSON schema. Output ONLY valid JSON, no markdown wrappers, no commentary:
 {
@@ -5648,12 +5891,16 @@ Requirements:
                         ],
                         response_format: { type: "json_object" },
                         reasoning_effort: "low",
-                        max_tokens: 8000,
+                        max_tokens: 5000,
                         temperature: 0.7
                     })
                 });
-                if (!response.ok) throw new Error(`API error ${response.status}`);
-                const data = await response.json();
+                if (!response.ok) {
+                    if (response.status === 413) throw new Error('Too many mistakes to process at once. Try selecting a single exam instead of several, then regenerate.');
+                    if (response.status === 429) throw new Error('Rate limit reached — wait about a minute, then try again (free tier has a per-minute token cap).');
+                    throw new Error(`API error ${response.status}`);
+                }
+                _captureGroqUsage(response); const data = await response.json();
                 const aiContent = data.choices?.[0]?.message?.content;
                 if (!aiContent) throw new Error("Empty AI response");
                 const parsed = _parseAIJson(aiContent);
@@ -7220,7 +7467,7 @@ Points earned: ${_tutorContext.score}/${_tutorContext.maxPoints}`;
                     body: JSON.stringify({ model: "openai/gpt-oss-120b", messages, temperature: 0.7 })
                 });
                 if (!response.ok) throw new Error(`API error ${response.status}`);
-                const data = await response.json();
+                _captureGroqUsage(response); const data = await response.json();
                 const reply = data.choices?.[0]?.message?.content || '(no response)';
                 typingEl.remove();
                 _tutorHistory.push({ role: 'assistant', content: reply });
@@ -7295,7 +7542,7 @@ All questions must be short-answer style (the student types a response). Make th
                     body: JSON.stringify({ model: "openai/gpt-oss-120b", messages: [{ role: 'system', content: 'You generate practice questions in valid JSON only.' }, { role: 'user', content: prompt }], response_format: { type: 'json_object' }, reasoning_effort: "low", max_tokens: 6000, temperature: 0.8 })
                 });
                 if (!response.ok) throw new Error(`API error ${response.status}`);
-                const data = await response.json();
+                _captureGroqUsage(response); const data = await response.json();
                 const parsed = _parseAIJson(data.choices?.[0]?.message?.content || '');
                 if (!Array.isArray(parsed.questions) || !parsed.questions.length) throw new Error('No questions returned.');
                 _practiceQuiz = { questions: parsed.questions, currentIdx: 0, answers: [] };
@@ -7371,7 +7618,7 @@ All questions must be short-answer style (the student types a response). Make th
                 const apiKey = await getGroqApiKey();
                 const prompt = `Grade this answer against the ideal answer.\n\nQuestion: ${q.question}\nIdeal answer: ${q.idealAnswer}\nStudent's answer: ${userAnswer}\n\nReturn ONLY JSON: {"score": <0.0-1.0>, "feedback": "<one to two sentences explaining what's right/wrong>"}`;
                 const r = await fetch("https://api.groq.com/openai/v1/chat/completions", { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify({ model: 'openai/gpt-oss-120b', messages: [{ role: 'system', content: 'You grade student answers. Output JSON only.' }, { role: 'user', content: prompt }], response_format: { type: 'json_object' }, reasoning_effort: "low", max_tokens: 2000, temperature: 0.2 }) });
-                const data = await r.json();
+                _captureGroqUsage(r); const data = await r.json();
                 const parsed = _parseAIJson(data.choices?.[0]?.message?.content || '');
                 const score = Math.max(0, Math.min(1, parseFloat(parsed.score) || 0));
                 const feedback = parsed.feedback || '(no feedback)';
@@ -7627,7 +7874,7 @@ ${context || '(No specific exams selected — guide them based on whatever they 
                     body: JSON.stringify({ model: "openai/gpt-oss-120b", messages, temperature: 0.75 })
                 });
                 if (!response.ok) throw new Error(`API error ${response.status}`);
-                const data = await response.json();
+                _captureGroqUsage(response); const data = await response.json();
                 const reply = data.choices?.[0]?.message?.content || '(no response)';
                 typingEl.remove();
                 _coachChatHistory.push({ role: 'assistant', content: reply });
@@ -8552,6 +8799,8 @@ ${context || '(No specific exams selected — guide them based on whatever they 
             });
             document.getElementById('ai-modal-cancel').addEventListener('click', closeAIGeneratorModal);
             document.getElementById('ai-generate-confirm').addEventListener('click', generateAIQuestion);
+            document.querySelectorAll('#ai-difficulty-group .ai-diff-opt').forEach(b => b.addEventListener('click', () => _setAIDifficulty(b.dataset.diff)));
+            document.getElementById('ai-topic-input').addEventListener('keydown', e => { if (e.key === 'Enter') generateAIQuestion(); });
             document.getElementById('file-upload-input').addEventListener('change', handleFileUpload);
             document.getElementById('submit-exam-button').addEventListener('click', submitExam);
             document.getElementById('results-back-button').addEventListener('click', () => showView('app-dashboard-view'));
