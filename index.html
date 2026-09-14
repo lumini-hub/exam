@@ -5250,23 +5250,45 @@ RULES:
 
         // Render lightweight Markdown to safe HTML for AI chat messages.
         // Escapes everything first (XSS-safe), then applies formatting.
+        // Render a LaTeX string to HTML via KaTeX (safe fallback to plain text)
+        function _renderKatex(tex, displayMode) {
+            try {
+                if (window.katex) return window.katex.renderToString(tex, { displayMode: !!displayMode, throwOnError: false, output: 'html' });
+            } catch (e) {}
+            return _escapeHtml(tex);
+        }
+
         function _renderMarkdown(raw) {
             if (raw == null) return '';
-            let s = _escapeHtml(String(raw));
+            let s = String(raw);
 
-            // Strip common LaTeX wrappers so math reads cleanly (we don't render MathJax here)
-            s = s.replace(/\\\[|\\\]|\\\(|\\\)/g, '');           // \[ \] \( \)
-            s = s.replace(/\$\$([^$]+)\$\$/g, '$1');              // $$...$$
-            s = s.replace(/\$([^$\n]+)\$/g, '$1');                // $...$
-            s = s.replace(/\\text\{([^}]*)\}/g, '$1');            // \text{...}
-            s = s.replace(/\\rho/g, 'ρ').replace(/\\times/g, '×').replace(/\\approx/g, '≈').replace(/\\;/g, ' ');
-
-            // Fenced code blocks ```...```
+            // ---- Extract fenced code blocks FIRST (raw), so $ inside code isn't treated as math ----
             const codeBlocks = [];
             s = s.replace(/```(?:\w+)?\n?([\s\S]*?)```/g, (m, code) => {
-                codeBlocks.push(code.replace(/\n$/, ''));
+                codeBlocks.push(_escapeHtml(code.replace(/\n$/, '')));
                 return `\u0000CODE${codeBlocks.length - 1}\u0000`;
             });
+            // Inline code `...` too
+            s = s.replace(/`([^`]+)`/g, (m, code) => {
+                codeBlocks.push(_escapeHtml(code));
+                return `\u0000ICODE${codeBlocks.length - 1}\u0000`;
+            });
+
+            // ---- Extract math (before HTML-escaping), render with KaTeX, stash as placeholders ----
+            const mathBlocks = [];
+            const stash = (tex, display) => { mathBlocks.push(_renderKatex(tex, display)); return `\u0001MATH${mathBlocks.length - 1}\u0001`; };
+            // Display math: $$...$$  and  \[...\]
+            s = s.replace(/\$\$([\s\S]+?)\$\$/g, (m, tex) => stash(tex.trim(), true));
+            s = s.replace(/\\\[([\s\S]+?)\\\]/g, (m, tex) => stash(tex.trim(), true));
+            // Inline math: \(...\)  and  $...$
+            s = s.replace(/\\\(([\s\S]+?)\\\)/g, (m, tex) => stash(tex.trim(), false));
+            s = s.replace(/\$([^$\n]+?)\$/g, (m, tex) => stash(tex.trim(), false));
+            // Bare LaTeX commands the model often emits WITHOUT delimiters (\frac{}{}, N_{x}, x^{2}, \times ...)
+            s = s.replace(/(\\(?:frac|sqrt|sum|int|lim|log|sin|cos|tan|alpha|beta|gamma|theta|pi|rho|mu|omega|Delta|times|div|pm|cdot|leq|geq|neq|approx|infty|rightarrow|to)\b(?:\s*[_^]?\{[^{}]*\})*|\b[A-Za-z]+_\{[^{}]+\}|\b[A-Za-z0-9]+\^\{[^{}]+\}|\b[A-Za-z]+_[A-Za-z0-9]+)/g, (m) => stash(m.trim(), false));
+
+            // Now escape the remaining (non-math, non-code) text
+            s = _escapeHtml(s);
+
 
             // Tables (GitHub-style). Detect blocks of lines containing | with a separator row.
             s = s.replace(/(^|\n)((?:\|.*\|[ \t]*\n)(?:\|[ \t:|-]+\|[ \t]*\n)(?:\|.*\|[ \t]*\n?)*)/g, (m, lead, table) => {
@@ -5292,10 +5314,9 @@ RULES:
             // Horizontal rule
             s = s.replace(/^\s*---\s*$/gm, '<hr class="md-hr">');
 
-            // Bold, italic, inline code
+            // Bold, italic (inline code already extracted early)
             s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
             s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
-            s = s.replace(/`([^`]+)`/g, '<code class="md-code">$1</code>');
 
             // Numbered lists
             s = s.replace(/(?:^|\n)((?:[ \t]*\d+\.\s+.*(?:\n|$))+)/g, (m, block) => {
@@ -5315,7 +5336,10 @@ RULES:
 
             // Restore code blocks and tables
             s = s.replace(/\u0000CODE(\d+)\u0000/g, (m, i) => `<pre class="md-pre"><code>${codeBlocks[+i]}</code></pre>`);
+            s = s.replace(/\u0000ICODE(\d+)\u0000/g, (m, i) => `<code class="md-code">${codeBlocks[+i]}</code>`);
             s = s.replace(/\u0000TABLE(\d+)\u0000/g, (m, i) => codeBlocks[+i]);
+            // Restore rendered KaTeX math (already HTML from KaTeX — do not escape)
+            s = s.replace(/\u0001MATH(\d+)\u0001/g, (m, i) => mathBlocks[+i]);
             return s;
         }
 
